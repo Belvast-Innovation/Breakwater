@@ -1,0 +1,17 @@
+[package]
+name = "example-owner-account"
+description = "Owner key account for the policy-bypass demo: a custom account verifying one Ed25519 signature"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+stellar-accounts = { workspace = true }

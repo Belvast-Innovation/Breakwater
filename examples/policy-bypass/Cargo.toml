@@ -13,14 +13,18 @@ crate-type = ["lib", "cdylib"]
 doctest = false
 
 [features]
-# Helper contracts (owner key account, spending-limit policy, Ed25519 verifier)
-# used by the suite. Off by default so the wasm build exports only DemoAccount:
-# several contracts in one cdylib would collide on `__check_auth` and `install`.
-helpers = []
+# Re-exports the helper contracts (owner key account, spending-limit policy,
+# Ed25519 verifier) for the suite. They are separate crates under `contracts/`
+# because one cdylib cannot export two `__check_auth`; off by default so the
+# wasm build of this crate contains only DemoAccount.
+helpers = ["dep:example-owner-account", "dep:example-spending-limit-policy", "dep:example-ed25519-verifier"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
 stellar-accounts = { workspace = true }
+example-owner-account = { workspace = true, optional = true }
+example-spending-limit-policy = { workspace = true, optional = true }
+example-ed25519-verifier = { workspace = true, optional = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

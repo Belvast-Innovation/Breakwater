@@ -17,15 +17,82 @@
 use soroban_sdk::auth::{Context, CustomAccountInterface};
 use soroban_sdk::crypto::Hash;
 // The `contracttrait` expansion of `SmartAccount` names these types unqualified.
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, String, Val, Vec};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, Address, BytesN, Env, IntoVal, Map, String, Val, Vec,
+};
+use stellar_accounts::policies::spending_limit::SpendingLimitAccountParams;
 use stellar_accounts::smart_account::{
-    do_check_auth, AuthDigestPreimage, AuthPayload, ContextRule, ContextRuleType, Signer,
-    SmartAccount, SmartAccountError,
+    add_context_rule, do_check_auth, AuthDigestPreimage, AuthPayload, ContextRule, ContextRuleType,
+    Signer, SmartAccount, SmartAccountError,
 };
 
-/// An OpenZeppelin smart account with no customisation.
+/// A spending-limit policy to attach to an initial rule, in a shape the
+/// Stellar CLI can take as typed JSON (a `Val` parameter cannot be typed on
+/// the command line).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct SpendingLimitInstall {
+    /// Policy contract.
+    pub policy: Address,
+    /// Maximum cumulative amount inside one window.
+    pub spending_limit: i128,
+    /// Window length in ledgers.
+    pub period_ledgers: u32,
+}
+
+/// A context rule installed by the constructor.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct InitialRule {
+    /// Scope of the rule.
+    pub context_type: ContextRuleType,
+    /// Human-readable name (at most 20 bytes).
+    pub name: String,
+    /// Optional expiry ledger.
+    pub valid_until: Option<u32>,
+    /// Signers allowed under this rule.
+    pub signers: Vec<Signer>,
+    /// Arbitrary policies with pre-encoded install parameters.
+    pub policies: Map<Address, Val>,
+    /// Spending-limit policies with typed parameters; merged into `policies`.
+    pub spending_limits: Vec<SpendingLimitInstall>,
+}
+
+/// An OpenZeppelin smart account with no customisation beyond a constructor
+/// that installs its initial context rules.
+///
+/// The constructor exists for on-chain deployment: `add_context_rule` requires
+/// the account's own authorization, which an account with zero rules can never
+/// produce. Inside the constructor the storage-level function is called
+/// directly, and the policies' `install` callbacks pass because the account is
+/// their direct invoker.
 #[contract]
 pub struct DemoAccount;
+
+#[contractimpl]
+impl DemoAccount {
+    /// Installs `rules` in order; an empty list leaves the account unconfigured.
+    pub fn __constructor(env: Env, rules: Vec<InitialRule>) {
+        for rule in rules.iter() {
+            let mut policies = rule.policies.clone();
+            for install in rule.spending_limits.iter() {
+                let params = SpendingLimitAccountParams {
+                    spending_limit: install.spending_limit,
+                    period_ledgers: install.period_ledgers,
+                };
+                policies.set(install.policy.clone(), params.into_val(&env));
+            }
+            add_context_rule(
+                &env,
+                &rule.context_type,
+                &rule.name,
+                rule.valid_until,
+                &rule.signers,
+                &policies,
+            );
+        }
+    }
+}
 
 #[contractimpl]
 impl CustomAccountInterface for DemoAccount {
