@@ -11,3 +11,5 @@ publish.workspace = true
 [dependencies]
 breakwater = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
