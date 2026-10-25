@@ -22,14 +22,11 @@
 # Secrets never appear on a command line or in output: signer seeds are read by
 # `stellar keys secret` and passed to the helper through the environment.
 #
-# Wasm inputs (env, with defaults from `stellar contract build`):
-#   ACCOUNT_WASM   examples/policy-bypass -> DemoAccount
-#   OWNER_WASM     owner key account contract
-#   POLICY_WASM    spending-limit policy contract
-#   VERIFIER_WASM  ed25519 verifier contract
-# The three helper contracts are not built as separate wasm files yet (they are
-# gated behind the example's `helpers` feature and cannot share one cdylib), so
-# setup stops with a clear message until those wasm files exist.
+# Wasm inputs (env, defaults are what `stellar contract build --package` writes):
+#   ACCOUNT_WASM   example-policy-bypass          -> DemoAccount
+#   OWNER_WASM     example-owner-account          -> OwnerAccount
+#   POLICY_WASM    example-spending-limit-policy  -> SpendingLimitPolicy
+#   VERIFIER_WASM  example-ed25519-verifier       -> Ed25519Verifier
 
 set -euo pipefail
 
@@ -71,10 +68,11 @@ STATE="${STATE:-breakwater-out/replay-${NETWORK}.json}"
 mkdir -p "$(dirname "$STATE")"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ACCOUNT_WASM="${ACCOUNT_WASM:-$ROOT/target/wasm32v1-none/release/example_policy_bypass.wasm}"
-OWNER_WASM="${OWNER_WASM:-}"
-POLICY_WASM="${POLICY_WASM:-}"
-VERIFIER_WASM="${VERIFIER_WASM:-}"
+WASM_DIR="$ROOT/target/wasm32v1-none/release"
+ACCOUNT_WASM="${ACCOUNT_WASM:-$WASM_DIR/example_policy_bypass.wasm}"
+OWNER_WASM="${OWNER_WASM:-$WASM_DIR/example_owner_account.wasm}"
+POLICY_WASM="${POLICY_WASM:-$WASM_DIR/example_spending_limit_policy.wasm}"
+VERIFIER_WASM="${VERIFIER_WASM:-$WASM_DIR/example_ed25519_verifier.wasm}"
 
 USDC=10000000           # 1 USDC in stroops
 PER_CALL_CAP_USDC=50
@@ -123,48 +121,43 @@ latest_ledger() {
 # ---------------------------------------------------------------- setup ----
 setup() {
   log "== setup on $NETWORK (source $SOURCE = $SOURCE_ADDR)"
-  for w in OWNER_WASM POLICY_WASM VERIFIER_WASM; do
-    if [ -z "${!w}" ]; then
-      log "error: $w is not set. The owner account, spending-limit policy and ed25519"
-      log "verifier are gated behind the example's 'helpers' feature and cannot be built"
-      log "as separate wasm files yet; build them as separate crates and pass the paths."
-      [ "$DRY_RUN" = 1 ] || exit 2
-    fi
+  log "-- build contract wasm files"
+  for pkg in example-policy-bypass example-owner-account example-spending-limit-policy example-ed25519-verifier; do
+    run stellar contract build --package "$pkg" >/dev/null
   done
-
-  log "-- build DemoAccount wasm"
-  run stellar contract build --package example-policy-bypass
+  for w in ACCOUNT_WASM OWNER_WASM POLICY_WASM VERIFIER_WASM; do
+    [ "$DRY_RUN" = 1 ] || [ -f "${!w}" ] || { log "error: ${!w} not found ($w)"; exit 2; }
+  done
 
   log "-- deploy helper contracts"
   local verifier policy_per_call policy_daily owner_account account token
-  verifier="$(cap stellar contract deploy --network "$NETWORK" --source "$SOURCE" --wasm "${VERIFIER_WASM:-VERIFIER_WASM}")"
-  policy_per_call="$(cap stellar contract deploy --network "$NETWORK" --source "$SOURCE" --wasm "${POLICY_WASM:-POLICY_WASM}")"
-  policy_daily="$(cap stellar contract deploy --network "$NETWORK" --source "$SOURCE" --wasm "${POLICY_WASM:-POLICY_WASM}")"
+  verifier="$(cap stellar contract deploy --network "$NETWORK" --source "$SOURCE" --wasm "$VERIFIER_WASM")"
+  policy_per_call="$(cap stellar contract deploy --network "$NETWORK" --source "$SOURCE" --wasm "$POLICY_WASM")"
+  policy_daily="$(cap stellar contract deploy --network "$NETWORK" --source "$SOURCE" --wasm "$POLICY_WASM")"
   # The owner account verifies an Ed25519 signature: its constructor takes the owner's public key.
   local owner_pk; owner_pk="$(pubkey_hex "$OWNER")"
-  owner_account="$(cap stellar contract deploy --network "$NETWORK" --source "$SOURCE" --wasm "${OWNER_WASM:-OWNER_WASM}" -- --public_key "$owner_pk")"
+  owner_account="$(cap stellar contract deploy --network "$NETWORK" --source "$SOURCE" --wasm "$OWNER_WASM" -- --public_key "$owner_pk")"
 
   log "-- deploy the test asset (USDC issued by $SOURCE) and let the merchant hold it"
   token="$(cap stellar contract asset deploy --network "$NETWORK" --source "$SOURCE" --asset "USDC:$SOURCE_ADDR")"
   run stellar tx new change-trust --network "$NETWORK" --source "$MERCHANT" --line "USDC:$SOURCE_ADDR"
 
-  log "-- deploy DemoAccount with its two context rules"
-  # NOTE: DemoAccount has no constructor on main; add_context_rule requires the
-  # account's own authorization, which an account with zero rules cannot give.
-  # On-chain bootstrap therefore needs a constructor that installs the initial
-  # rules (see the proposal in docs/DEVELOPMENT.md). The call below assumes a
-  # constructor `__constructor(rules: Vec<InitialRule>)`.
+  log "-- deploy DemoAccount with its two context rules (constructor InitialRule list)"
+  # Same configuration as examples/policy-bypass/tests/suite.rs: rule 0 owner
+  # (Default, Delegated owner account), rule 1 agent (CallContract(token),
+  # External ed25519 key, 50 USDC per ledger and 100 USDC per 1 728 ledgers).
   local rules
   rules="$(jq -nc \
     --arg owner "$owner_account" --arg verifier "$verifier" --arg agent_pk_hex "$(pubkey_hex "$AGENT")" \
     --arg token "$token" --arg p1 "$policy_per_call" --arg p2 "$policy_daily" \
     --arg cap "$((PER_CALL_CAP_USDC * USDC))" --arg daily "$((DAILY_CAP_USDC * USDC))" --arg window "$BUGGY_DAILY_WINDOW" '
     [
-      { context_type: "Default", name: "owner", signers: [ { Delegated: $owner } ], policies: {} },
-      { context_type: { CallContract: $token }, name: "agent",
-        signers: [ { External: [ $verifier, $agent_pk_hex ] } ],
-        policies: { ($p1): { spending_limit: $cap, period_ledgers: 1 },
-                    ($p2): { spending_limit: $daily, period_ledgers: ($window|tonumber) } } }
+      { context_type: "Default", name: "owner", valid_until: null,
+        signers: [ { Delegated: $owner } ], policies: {}, spending_limits: [] },
+      { context_type: { CallContract: $token }, name: "agent", valid_until: null,
+        signers: [ { External: [ $verifier, $agent_pk_hex ] } ], policies: {},
+        spending_limits: [ { policy: $p1, spending_limit: $cap, period_ledgers: 1 },
+                           { policy: $p2, spending_limit: $daily, period_ledgers: ($window|tonumber) } ] }
     ]')"
   account="$(cap stellar contract deploy --network "$NETWORK" --source "$SOURCE" --wasm "$ACCOUNT_WASM" -- --rules "$rules")"
 
@@ -186,10 +179,13 @@ setup() {
 
 # ------------------------------------------------------------- one step ----
 # Submits `usdc.transfer(account, merchant, amount)` authorized by the agent:
-#  1. build the transaction with simulation (records an auth entry for the account),
-#  2. take nonce / expiration / root invocation from that entry,
+#  1. build the transaction (`--build-only` is not simulated) and simulate it in
+#     recording mode, which records an auth entry for the account with the nonce
+#     set, the expiration unset and a void signature,
+#  2. take nonce / root invocation from that entry and pick an expiration ledger,
 #  3. have oz-auth-entry sign the OpenZeppelin AuthPayload for it,
-#  4. splice the signed entry back, sign with the source key, send.
+#  4. splice the signed entry back, simulate again (enforce mode, so the
+#     footprint and fees include __check_auth and the policies), sign, send.
 agent_transfer() { # amount_usdc
   local amount=$(( $1 * USDC ))
   local account token
@@ -198,16 +194,22 @@ agent_transfer() { # amount_usdc
 
   local built decoded nonce expiration invocation_json invocation_xdr signed_entries patched final
   built="$(cap stellar contract invoke --network "$NETWORK" --source "$SOURCE" --id "$token" --build-only -- transfer --from "$account" --to "$MERCHANT_ADDR" --amount "$amount")"
-  decoded="$(cap sh -c "printf '%s' '$built' | stellar tx decode")"
+  local recorded
+  recorded="$(cap sh -c "printf '%s' '$built' | stellar tx simulate --network '$NETWORK' --source-account '$SOURCE'")"
+  decoded="$(cap sh -c "printf '%s' '$recorded' | stellar tx decode")"
   if [ "$DRY_RUN" = 1 ]; then
-    log "   (then: extract .tx.tx.operations[0].body.invoke_host_function_op.auth[0] nonce, signature_expiration_ledger, root_invocation;"
+    log "   (then: extract .tx.tx.operations[0].body.invoke_host_function.auth[0] nonce, signature_expiration_ledger, root_invocation;"
     log "    stellar xdr encode --type SorobanAuthorizedInvocation; oz-auth-entry; stellar xdr decode --type SorobanAuthorizationEntry;"
     log "    jq-splice into the envelope; stellar tx encode | stellar tx sign --sign-with-key $SOURCE | stellar tx send)"
     return 0
   fi
-  nonce="$(printf '%s' "$decoded" | jq -r '.tx.tx.operations[0].body.invoke_host_function_op.auth[0].credentials.address.nonce')"
-  expiration="$(printf '%s' "$decoded" | jq -r '.tx.tx.operations[0].body.invoke_host_function_op.auth[0].credentials.address.signature_expiration_ledger')"
-  invocation_json="$(printf '%s' "$decoded" | jq -c '.tx.tx.operations[0].body.invoke_host_function_op.auth[0].root_invocation')"
+  nonce="$(printf '%s' "$decoded" | jq -r '.tx.tx.operations[0].body.invoke_host_function.auth[0].credentials.address.nonce')"
+  expiration="$(printf '%s' "$decoded" | jq -r '.tx.tx.operations[0].body.invoke_host_function.auth[0].credentials.address.signature_expiration_ledger')"
+  # Recording-mode simulation may leave nonce / expiration unset; pick our own then.
+  if [ -z "$nonce" ] || [ "$nonce" = "null" ] || [ "$nonce" = "0" ]; then nonce="$(( $(date +%s) ))"; fi
+  if [ -z "$expiration" ] || [ "$expiration" = "null" ] || [ "$expiration" = "0" ]; then expiration=$(( $(latest_ledger) + 200 )); fi
+  log "   auth entry: nonce=$nonce expiration_ledger=$expiration"
+  invocation_json="$(printf '%s' "$decoded" | jq -c '.tx.tx.operations[0].body.invoke_host_function.auth[0].root_invocation')"
   invocation_xdr="$(printf '%s' "$invocation_json" | stellar xdr encode --type SorobanAuthorizedInvocation)"
 
   signed_entries="$(BREAKWATER_NETWORK_PASSPHRASE="$(stellar network ls -l | awk -v n="$NETWORK" '$0 ~ "Name: "n {f=1} f && /Network passphrase:/ {sub(/.*passphrase: /, ""); print; exit}')" \
@@ -218,9 +220,18 @@ agent_transfer() { # amount_usdc
     cargo run -q -p breakwater-pack-policy-bypass --bin oz-auth-entry)"
   local entry_json
   entry_json="$(printf '%s' "$signed_entries" | head -1 | stellar xdr decode --type SorobanAuthorizationEntry --output json)"
-  patched="$(printf '%s' "$decoded" | jq --argjson e "$entry_json" '.tx.tx.operations[0].body.invoke_host_function_op.auth = [$e]')"
-  final="$(printf '%s' "$patched" | stellar tx encode | stellar tx sign --network "$NETWORK" --sign-with-key "$SOURCE" | stellar tx send --network "$NETWORK")"
-  printf '%s\n' "$final"
+  patched="$(printf '%s' "$decoded" | jq --argjson e "$entry_json" '.tx.tx.operations[0].body.invoke_host_function.auth = [$e]' | stellar tx encode)"
+  # Re-simulate with the signed entry in place: recording-mode simulation did not
+  # run __check_auth, so the footprint and fees must be recomputed (enforce mode).
+  local assembled
+  assembled="$(printf '%s' "$patched" | stellar tx simulate --network "$NETWORK" --source-account "$SOURCE")"
+  local signed hash
+  signed="$(printf '%s' "$assembled" | stellar tx sign --network "$NETWORK" --sign-with-key "$SOURCE")"
+  hash="$(printf '%s' "$signed" | stellar tx hash)"
+  final="$(printf '%s' "$signed" | stellar tx send --network "$NETWORK")"
+  log "   tx $hash -> $(printf '%s' "$final" | jq -r '.status // "sent"' 2>/dev/null || echo sent)"
+  log "   https://stellar.expert/explorer/testnet/tx/$hash"
+  state_set "tx_step_${CURRENT_STEP}" "$hash"
 }
 
 wait_for_ledger() { # target
@@ -258,12 +269,14 @@ printf '%s\n' "$STEPS" | while IFS= read -r step; do
     [ "$DRY_RUN" = 1 ] || wait_for_ledger "$target"
   fi
   log "== step $INDEX: $actor $handler $(printf '%s' "$step" | jq -c .args)"
+  CURRENT_STEP="$INDEX"
   case "$handler" in
     transfer) agent_transfer "$(printf '%s' "$step" | jq -r .args.amount_usdc)" ;;
     *) log "   handler $handler is not supported by the replay; skipping" ;;
   esac
   LAST_STEP_LEDGER="$(latest_ledger)"
   state_set completed_steps "$((INDEX + 1))"
+  state_set "ledger_step_${INDEX}" "$LAST_STEP_LEDGER"
   state_set last_step_ledger "$LAST_STEP_LEDGER"
   state_set current_ledger "$LAST_STEP_LEDGER"
   INDEX=$((INDEX + 1))
