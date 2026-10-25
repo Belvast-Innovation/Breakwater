@@ -120,51 +120,85 @@ Exit codes: `0` all invariants held, `1` a violation was found, `2` usage or con
 
 ## Writing a test
 
+The suite below is `crates/breakwater/tests/counter.rs`, compiled and run by `cargo test`: a counter contract, one handler, one invariant. The framework finds the eleventh increment and shrinks the sequence to eleven steps.
+
 ```rust
 use breakwater::proptest::prelude::*;
 use breakwater::{Actor, CallContext, CallOutcome, Handler, HandlerError, Invariant, Suite, TxLog, Violation};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Symbol};
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-struct PayArgs { amount_usdc: i64 }
+const COUNT: Symbol = symbol_short!("COUNT");
+const LIMIT: u32 = 10;
 
-struct Pay { wallet: String, actors: Vec<Actor> }   // addresses are kept as strkeys
+#[contract]
+pub struct Counter;
 
-impl Handler for Pay {
-    type Args = PayArgs;
-    fn name(&self) -> &'static str { "pay" }
+#[contractimpl]
+impl Counter {
+    pub fn increment(env: Env) -> u32 {
+        let n: u32 = env.storage().instance().get(&COUNT).unwrap_or(0) + 1;
+        env.storage().instance().set(&COUNT, &n);
+        n
+    }
+    pub fn get(env: Env) -> u32 {
+        env.storage().instance().get(&COUNT).unwrap_or(0)
+    }
+}
+
+struct Increment { contract: String, actors: Vec<Actor> }   // addresses are kept as strkeys
+
+impl Handler for Increment {
+    type Args = ();
+    fn name(&self) -> &'static str { "increment" }
     fn actors(&self) -> &[Actor] { &self.actors }
-    fn strategy(&self) -> BoxedStrategy<PayArgs> { (1i64..=50).prop_map(|amount_usdc| PayArgs { amount_usdc }).boxed() }
-    fn call(&self, env: &Env, _ctx: &CallContext, actor: &Actor, args: &PayArgs) -> Result<CallOutcome, HandlerError> {
-        let wallet = Address::from_str(env, &self.wallet);
-        match WalletClient::new(env, &wallet).try_pay(&actor.address(env), &args.amount_usdc) {
-            Ok(Ok(())) => Ok(CallOutcome::Success),
+    fn strategy(&self) -> BoxedStrategy<()> { Just(()).boxed() }
+    fn call(&self, env: &Env, _ctx: &CallContext, _actor: &Actor, _args: &()) -> Result<CallOutcome, HandlerError> {
+        let id = Address::from_str(env, &self.contract);
+        match CounterClient::new(env, &id).try_increment() {
+            Ok(Ok(count)) => Ok(CallOutcome::returning(count)),
+            Ok(Err(e)) => Err(HandlerError::Other(format!("conversion error: {e:?}"))),
             Err(Ok(e)) => Ok(CallOutcome::ContractError(e.get_code())),
-            other => Err(HandlerError::Host(format!("{other:?}"))),
+            Err(Err(e)) => Err(HandlerError::Host(format!("{e:?}"))),
         }
     }
 }
 
-struct DailyCap { limit: i64 }
-impl Invariant for DailyCap {
-    fn name(&self) -> &'static str { "daily_cap" }
-    fn check(&self, _env: &Env, log: &TxLog) -> Result<(), Violation> {
-        let spent: i64 = log.successes_of("pay").map(|s| s.args["amount_usdc"].as_i64().unwrap_or(0)).sum();
-        if spent > self.limit { return Err(Violation::new("daily cap exceeded").with_detail(spent)); }
+struct NeverAbove { contract: String }
+
+impl Invariant for NeverAbove {
+    fn name(&self) -> &'static str { "count_never_above_limit" }
+    fn check(&self, env: &Env, _log: &TxLog) -> Result<(), Violation> {
+        let id = Address::from_str(env, &self.contract);
+        let count = CounterClient::new(env, &id).get();
+        if count > LIMIT {
+            return Err(Violation::new("count exceeded the limit").with_detail(count));
+        }
         Ok(())
     }
 }
 
 #[test]
-fn breakwater_suite() {
-    let report = Suite::new("wallet", env)            // `env` holds the deployed contracts
-        .seed(42).steps(1..=20)
-        .handler(Pay { wallet, actors: vec![agent] })
-        .invariant(DailyCap { limit: 100 })
-        .on_restore(move |env| { env.register_at(&Address::from_str(env, &id), Wallet, ()); })
+fn finds_the_eleventh_increment_and_shrinks_to_eleven_steps() {
+    let env = Env::default();
+    let contract = env.register(Counter, ()).to_string().to_string();
+    let owner = Actor::generate(&env, "owner");
+    let restore_id = contract.clone();
+
+    let report = Suite::new("counter", env)
+        .seed(42)
+        .steps(1..=30)
+        .cases(32)
+        .handler(Increment { contract: contract.clone(), actors: vec![owner] })
+        .invariant(NeverAbove { contract })
+        // Native test contracts live in the host, not the ledger: re-register them
+        // on every Env the suite restores from its snapshot.
+        .on_restore(move |env| { env.register_at(&Address::from_str(env, &restore_id), Counter, ()); })
         .run()
-        .unwrap();
-    breakwater::Exporter::write_if_requested(&report).unwrap();   // hands the result to the CLI
-    assert!(report.failure().is_none());
+        .expect("suite runs");
+
+    let failure = report.failure().expect("the limit must be exceeded");
+    assert_eq!(failure.violation.source, "count_never_above_limit");
+    assert_eq!(failure.log.len(), LIMIT as usize + 1);   // shrunk to exactly eleven steps
 }
 ```
 
@@ -192,6 +226,8 @@ Advances the ledger according to a usage profile (`LedgerAdvance::daily_then_sil
 - `NoMidLifecycleExpiry`: no persistent entry a running stream depends on runs out of TTL
 - `InstanceAlive`: the contract instance stays alive while any stream is running
 - `RestoreRestoresFunction`: after an archived entry is restored, `withdraw` and `cancel` still work (checked on a throwaway copy of the ledger, so the probe never disturbs the run)
+- `NoUnboundedTtlExtension`: no entry is kept alive beyond what its stream needs; catches a public, unauthenticated `extend_ttl` entry point used to park data at the contract's rent
+- `RestoreCostWithinBudget`: a call made while entries are archived stays within a resource budget (instructions, memory, disk read and write entries and bytes, from the host's metering), so restoration cannot push a transaction over the network limits
 
 What expiry means on Soroban since Protocol 23: an archived persistent or instance entry is not lost, and a call that touches it does not simply fail. Every later transaction must carry a restore footprint (simulation adds it) and pay restoration fees, and a transaction built without one fails. The pack therefore reads each entry's `live_until` directly from the ledger entries, because any contract read, and the SDK's own `get_ttl` test helper, would restore the entry and hide the finding.
 
@@ -211,7 +247,7 @@ Breakwater is infrastructure, so "use of Stellar" means use of the protocol itse
 
 ## Testnet evidence
 
-Replaying a shrunk failing sequence on Testnet is part of the demo (`scripts/replay-testnet.sh`, see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md#8-replaying-on-testnet)). Local fuzzing stays local; only the exported reproduction goes on-chain. Contract IDs and transaction hashes are filled in at submission time:
+Replaying a shrunk failing sequence on Testnet is part of the demo (`scripts/replay-testnet.sh`, see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md#8-replaying-on-testnet)). Local fuzzing stays local; only the exported reproduction goes on-chain. Deployed and replayed on Testnet on 25 October 2026:
 
 | Item | Value |
 | --- | --- |
@@ -235,19 +271,28 @@ The stream's expiry itself cannot be waited for on Testnet: the entry lives for 
 ```
 breakwater/
 ├── crates/
-│   ├── breakwater/          # core library: Suite, Handler, Invariant, shrinking, export
-│   ├── breakwater-cli/      # `breakwater run | export | report`
+│   ├── breakwater/                  # core library: Suite, Handler, Invariant, replay, JSON export
+│   ├── breakwater-cli/              # `breakwater run | export | report`
 │   └── packs/
-│       ├── policy-bypass/   # invariants + generators for OZ smart accounts
-│       └── ttl-archival/    # invariants + ledger-advance strategies for TTL
+│       ├── policy-bypass/           # invariants, generators and real-auth entries for OZ smart accounts
+│       └── ttl-archival/            # TTL probes, stream model and archival invariants
 ├── examples/
-│   ├── policy-bypass/       # deliberately misconfigured smart account + suite
-│   └── ttl-archival/        # payment-stream contract that never extends TTL
+│   ├── policy-bypass/               # DemoAccount: an OZ smart account with a mis-sized spending window
+│   │   ├── contracts/
+│   │   │   ├── owner-account/       # the owner's Ed25519 key account (Signer::Delegated)
+│   │   │   ├── spending-limit-policy/
+│   │   │   └── ed25519-verifier/
+│   │   └── tests/                   # suite.rs, common/ (fixture, handlers), repro_policy_bypass_7.rs
+│   └── ttl-archival/                # PaymentStream (never extends TTL) and PaymentStreamFixed
+│       └── tests/                   # suite.rs, common/, repro_ttl_archival_11.rs
+├── scripts/
+│   └── replay-testnet.sh            # replays an exported sequence on Testnet
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── DEVELOPMENT.md
-│   └── SUBMISSION.md
-├── CLAUDE.md                # working agreement for AI-assisted development
+│   ├── SUBMISSION.md
+│   └── reports/                     # HTML reports rendered by `breakwater report --html`
+├── CLAUDE.md                        # working agreement for AI-assisted development
 └── README.md
 ```
 
@@ -281,6 +326,7 @@ Where AI meaningfully generated code or content:
 | Attack packs | First drafts of invariant implementations from written specs | Threat modelling, choice of invariants, verification against real contracts |
 | Demo contracts | Scaffolding from OpenZeppelin examples | Deliberate misconfigurations, TTL bug |
 | CLI and report output | Argument parsing, report formatting | UX decisions |
+| CLI, HTML report and Testnet replay scripts | First drafts of the `run` / `export` / `report` commands, the HTML renderer and `scripts/replay-testnet.sh` | Pipeline design (how the CLI drives a suite, how an agent-signed authorization entry is spliced into a transaction), on-chain verification |
 | Documentation | Drafts of README, `docs/`, CI config | All claims checked against the code and Stellar docs |
 
 Stellar documentation was pulled into the AI context through the official **Raven MCP** server and the **Stellar Dev Skill** plugin. All AI-generated code was read, tested and, where needed, rewritten by the team before being committed.
