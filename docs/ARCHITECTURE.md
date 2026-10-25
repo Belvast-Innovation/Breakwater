@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the shape of Breakwater as designed at the start of HackMeridian. Where the implementation diverges during the event, update this file in the same PR.
+This document describes Breakwater as implemented. When the implementation changes, update this file in the same PR.
 
 ## 1. Goals and non-goals
 
@@ -199,22 +199,22 @@ Exit codes: `0` all invariants held, `1` violation found, `2` usage or configura
 | Feature | Where |
 | --- | --- |
 | `require_auth` / `__check_auth` / `CustomAccountInterface` | `Real` auth mode |
-| State archival: `extend_ttl`, `get_ttl`, instance vs persistent durability | `ttl-archival` pack |
+| State archival: `extend_ttl`, entry `live_until` read straight from the ledger entries (not `get_ttl`, which restores), instance vs persistent durability | `ttl-archival` pack (§5) |
 | Ledger info manipulation via `testutils::Ledger` | `LedgerAdvance` |
-| `Env::budget()` | optional per-step CPU/mem capture for reports |
-| Stellar CLI deploy + invoke on Testnet | demo replay |
+| Per-invocation resource metering (`get_last_invocation_resources`) | `RestoreCostWithinBudget` |
+| Stellar CLI deploy + invoke on Testnet | demo replay: three agent-signed `policy-bypass` payments through the real smart account (README, Testnet evidence) |
 
-## 8. Open questions to resolve during the event
+## 8. Decisions and open questions
 
 **Decided**
 
 - How the CLI drives a suite: `breakwater run <suite-dir>` executes `cargo test --test suite breakwater_suite` in the target directory, passes seed, step range and auth mode through environment variables, and reads the JSON report the suite writes. No separate `suite` binary per example. See §6.
 - `soroban-fork` is not a dependency for the hackathon build: it currently supports `soroban-sdk` 25.x only and the workspace is pinned to 28.0.0. Mainnet-state fuzzing stays a roadmap item.
 - `Real` auth runs end to end at about 5 ms per step on the demo suite, so generation uses `Real` directly (see §4).
+- Sequence generation uses `proptest-state-machine`'s `Sequential` strategy directly; no custom `Strategy` was needed. Generators bias the arguments and ledger gaps instead of using preconditions.
+- Handler return values are recorded: `CallOutcome::SuccessWith` carries a value into `StepRecord::return_value` and the exported JSON. The `ttl-archival` `StreamModel` still infers stream ids from creation order, which matches the demo contract's counter.
+- Export format: both. The core `Exporter` emits the JSON report, and `breakwater export` wraps the shrunk steps in a `#[test]` that replays them through `Suite::replay` (see §6).
 
 **Open**
 
-- Whether `proptest-state-machine` preconditions are expressive enough for the policy generators, or whether a custom `Strategy` is needed.
-- Generating smart-account rule rotation (`remove_context_rule` + `add_context_rule`) under `Real` auth: policy `install` callbacks need pre-built sub-invocations. Interesting because re-creating a rule reinstalls `SpendingLimit` with an empty history, which is a second way to reset the window.
-- Stream ids in the `ttl-archival` pack are inferred from creation order because the log carries no return values. Recording handler return values in `StepRecord` would make the model exact.
-- Whether to export reproductions as `#[test]` functions or as a JSON step list plus a generic replay test. Both: the core `Exporter` emits the JSON report, and `breakwater export` wraps the shrunk steps in a `#[test]` that replays them through `Suite::replay` (see §6).
+- Generating smart-account rule rotation (`remove_context_rule` + `add_context_rule`) under `Real` auth: policy `install` callbacks need pre-built sub-invocations. Interesting because re-creating a rule reinstalls `SpendingLimit` with an empty history, which is a second way to reset the window. Tracked in the README [Roadmap](../README.md#roadmap).

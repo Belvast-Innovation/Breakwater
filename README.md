@@ -12,6 +12,8 @@ It ships with two **attack packs** for risks that are specific to Stellar:
 | `ttl-archival` | Contract state that expires under Soroban's TTL-based state archival while the business logic still depends on it | A one-year payment stream whose storage entry is archived at month six is a correctness bug no EVM tool knows to look for. |
 
 > **Status:** HackMeridian 2026 submission (Genesis path · Stellar Unlocked track). Built 25–26 October 2026 in Lisbon. See [Prior work and hackathon scope](#prior-work-and-hackathon-scope).
+>
+> **Submission materials:** pitch deck [`docs/deck/breakwater-pitch.pdf`](docs/deck/breakwater-pitch.pdf) · demo video: link added on 26 October.
 
 ---
 
@@ -101,7 +103,7 @@ violation: agent spent 147 within 17280 ledgers, limit is 100 (rolling_cap)
 reproduce with --seed 7; report: <temp dir>/breakwater-policy-bypass-7.json
 ```
 
-Three payments of 49 USDC, the third landing exactly one policy window (1 728 ledgers) after the first: every single call respected the 50 USDC per-call cap and the "daily" cap, yet the agent spent 147 USDC in a day. Every step ran through the host's real authorization path, so the OpenZeppelin smart account's `__check_auth` and its `SpendingLimit` policies genuinely let it through.
+Three payments of 49 USDC, the third landing exactly one policy window (1 728 ledgers) after the first: every single call respected the 50 USDC per-ledger cap and the "daily" cap, yet the agent spent 147 USDC in a day. Every step ran through the host's real authorization path, so the OpenZeppelin smart account's `__check_auth` and its `SpendingLimit` policies genuinely let it through.
 
 Real output of the archival demo:
 
@@ -212,28 +214,28 @@ A suite is an ordinary `cargo test`; the `breakwater` CLI drives the test named 
 
 Targets OpenZeppelin `stellar-contracts` 0.8.0 smart accounts. Built-in invariants:
 
-- `RollingCap`: cumulative spend of an actor within a rolling ledger window never exceeds the limit the operator meant
-- `AllowlistOnly`: an actor only ever succeeds with allow-listed calls
-- `RevokedNeverAuths`: once revoked, a signer never authorizes a call again
-- `PinnedWasm`: the policy and verifier executables pinned at setup are the ones in place at every step
+- `RollingCap`: cumulative spend of an actor within a rolling ledger window never exceeds the limit the operator meant (fires in the demo, seed 7)
+- `AllowlistOnly`: an actor only ever succeeds with allow-listed calls (holds in the demo)
+- `RevokedNeverAuths`: once revoked, a signer never authorizes a call again (holds in the demo)
+- `PinnedWasm`: the policy and verifier executables pinned at setup are the ones in place at every step (holds in the demo)
 
 Generators bias toward bypass shapes (amounts just under a cap, ledger gaps that straddle a policy window). Every step runs through the host's real authorization path (`AuthMode::Real`): the pack builds the `SorobanAuthorizationEntry` values an OpenZeppelin account expects, including the nested entry for a delegated signer, so a finding is a real bypass, not an artifact of mocked auth.
 
-The bundled demo (`examples/policy-bypass`) is an unmodified OpenZeppelin smart account whose agent rule carries two `SpendingLimit` policies: 50 USDC per ledger and 100 USDC per "day", where the day was configured as 1 728 ledgers instead of 17 280. `SpendingLimit` counts its window in ledgers, and dividing 86 400 seconds by 50 instead of by 5 is a one-character mistake. The suite finds the three-payment bypass shown above and shrinks it to the window boundary.
+The bundled demo (`examples/policy-bypass`) is an OpenZeppelin smart account with no changes besides a constructor that installs the initial context rules; its agent rule carries two `SpendingLimit` policies: 50 USDC per ledger and 100 USDC per "day", where the day was configured as 1 728 ledgers instead of 17 280. `SpendingLimit` counts its window in ledgers, and dividing 86 400 seconds by 50 instead of by 5 is a one-character mistake. The suite finds the three-payment bypass shown above and shrinks it to the window boundary.
 
 ### `ttl-archival`
 
 Advances the ledger according to a usage profile (`LedgerAdvance::daily_then_silence(30, 90)`: one call a day for a month, then a quiet quarter) and asserts:
 
-- `NoMidLifecycleExpiry`: no persistent entry a running stream depends on runs out of TTL
-- `InstanceAlive`: the contract instance stays alive while any stream is running
-- `RestoreRestoresFunction`: after an archived entry is restored, `withdraw` and `cancel` still work (checked on a throwaway copy of the ledger, so the probe never disturbs the run)
-- `NoUnboundedTtlExtension`: no entry is kept alive beyond what its stream needs; catches a public, unauthenticated `extend_ttl` entry point used to park data at the contract's rent
-- `RestoreCostWithinBudget`: a call made while entries are archived stays within a resource budget (instructions, memory, disk read and write entries and bytes, from the host's metering), so restoration cannot push a transaction over the network limits
+- `NoMidLifecycleExpiry`: no persistent entry a running stream depends on runs out of TTL (fires in the demo, seed 11)
+- `InstanceAlive`: the contract instance stays alive while any stream is running (holds in the demo until the run stops at the first violation, seed 11)
+- `RestoreRestoresFunction`: after an archived entry is restored, `withdraw` and `cancel` still work (checked on a throwaway copy of the ledger, so the probe never disturbs the run; holds in the demo until the run stops at the first violation, seed 11)
+- `NoUnboundedTtlExtension`: no entry is kept alive beyond what its stream needs; catches a public, unauthenticated `extend_ttl` entry point used to park data at the contract's rent (fires in the demo, seed 5)
+- `RestoreCostWithinBudget`: a call made while entries are archived stays within a resource budget (instructions, memory, disk read and write entries and bytes, from the host's metering), so restoration cannot push a transaction over the network limits (fires in the demo, seed 3)
 
 What expiry means on Soroban since Protocol 23: an archived persistent or instance entry is not lost, and a call that touches it does not simply fail. Every later transaction must carry a restore footprint (simulation adds it) and pay restoration fees, and a transaction built without one fails. The pack therefore reads each entry's `live_until` directly from the ledger entries, because any contract read, and the SDK's own `get_ttl` test helper, would restore the entry and hide the finding.
 
-The bundled demo (`examples/ttl-archival`) is a payment stream that keeps streams in persistent storage and never calls `extend_ttl`. Under the profile above, a one-year stream is archived after the quiet quarter with 275 days left to run; `PaymentStreamFixed`, which extends every touched entry to the stream's remaining duration, survives the same profile.
+The bundled demo (`examples/ttl-archival`) is a payment stream that keeps streams in persistent storage and never calls `extend_ttl`. Under the profile above, a one-year stream is archived after the quiet quarter with 275 days left to run; `PaymentStreamFixed`, which extends every touched entry to the stream's remaining duration, survives the same profile. Two more suites in `examples/ttl-archival/tests/` drive the other invariants: with seed 5, `NoUnboundedTtlExtension` shrinks to 3 steps in which anyone's call to the unauthenticated `bump_ttl` keeps a stream alive 1.3 days past its end; with seed 3, `RestoreCostWithinBudget` shrinks to 4 steps in which one `withdraw_many` after a quiet quarter reads 5 entries from disk against a budget of 3. That 3 is a threshold the suite sets, not a network limit.
 
 ## How Stellar is used
 
@@ -242,10 +244,10 @@ Breakwater is infrastructure, so "use of Stellar" means use of the protocol itse
 | Stellar feature | Where Breakwater uses it |
 | --- | --- |
 | Soroban authorization framework (`require_auth`, `__check_auth`, `CustomAccountInterface`) | `policy-bypass` executes through real custom-account auth |
-| Soroban state archival (TTL, `extend_ttl`, restore) | `ttl-archival` manipulates ledger sequence and TTL via `testutils` |
-| Resource metering (`Env::budget()`) | Optional per-step CPU / memory snapshot for regression reports |
+| Soroban state archival (TTL, `extend_ttl`, restore) | `ttl-archival` advances the ledger via `testutils` and reads each entry's `live_until` straight from the ledger entries (`Env::host().get_stored_entries()`), not through a contract read, so automatic restoration cannot hide an archived entry |
+| Per-invocation resource metering (`get_last_invocation_resources`) | `RestoreCostWithinBudget` bounds the disk reads and writes, instructions and memory of calls made while entries are archived |
 | OpenZeppelin smart-account contracts (ecosystem) | Demo target for the policy pack |
-| Stellar CLI + Testnet | Demo contracts are deployed to Testnet and the shrunk reproductions are replayed on-chain |
+| Stellar CLI + Testnet | Demo contracts are deployed to Testnet and the shrunk `policy-bypass` reproduction is replayed on-chain: three agent-signed payments through the real smart account (see [Testnet evidence](#testnet-evidence)) |
 
 ## Testnet evidence
 
@@ -271,7 +273,7 @@ The stream's expiry itself cannot be waited for within the hackathon: Testnet's 
 ## Project layout
 
 ```
-breakwater/
+Breakwater/
 ├── crates/
 │   ├── breakwater/                  # core library: Suite, Handler, Invariant, replay, JSON export
 │   ├── breakwater-cli/              # `breakwater run | export | report`
@@ -293,6 +295,8 @@ breakwater/
 │   ├── ARCHITECTURE.md
 │   ├── DEVELOPMENT.md
 │   ├── SUBMISSION.md
+│   ├── PITCH_DECK.md                # source of the pitch deck, with the origin of every number
+│   ├── deck/                        # breakwater-pitch.pdf / .pptx and the screenshots in shots/
 │   └── reports/                     # HTML reports rendered by `breakwater report --html`
 ├── CLAUDE.md                        # working agreement for AI-assisted development
 └── README.md
@@ -327,8 +331,7 @@ Where AI meaningfully generated code or content:
 | Core library (`crates/breakwater`) | Boilerplate for trait definitions, `proptest-state-machine` wiring, error types | Design of the `Handler` / `Invariant` / `Suite` API, shrinking strategy, review of every file |
 | Attack packs | First drafts of invariant implementations from written specs | Threat modelling, choice of invariants, verification against real contracts |
 | Demo contracts | Scaffolding from OpenZeppelin examples | Deliberate misconfigurations, TTL bug |
-| CLI and report output | Argument parsing, report formatting | UX decisions |
-| CLI, HTML report and Testnet replay scripts | First drafts of the `run` / `export` / `report` commands, the HTML renderer and `scripts/replay-testnet.sh` | Pipeline design (how the CLI drives a suite, how an agent-signed authorization entry is spliced into a transaction), on-chain verification |
+| CLI, report output, HTML report and Testnet replay scripts | Argument parsing, report formatting, first drafts of the `run` / `export` / `report` commands, the HTML renderer and `scripts/replay-testnet.sh` | UX decisions, pipeline design (how the CLI drives a suite, how an agent-signed authorization entry is spliced into a transaction), on-chain verification |
 | Documentation | Drafts of README, `docs/`, CI config | All claims checked against the code and Stellar docs |
 
 Stellar documentation was pulled into the AI context through the official **Raven MCP** server and the **Stellar Dev Skill** plugin. All AI-generated code was read, tested and, where needed, rewritten by the team before being committed.

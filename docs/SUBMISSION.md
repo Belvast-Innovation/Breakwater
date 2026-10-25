@@ -1,14 +1,14 @@
 # Submission checklist — HackMeridian 2026
 
-Deadline: **Monday 26 October 2026, 12:00 Europe/Lisbon. No late submissions.** Submit via the portal (app.hackmeridian.com → Team → Submission). The submission is `draft` until you hit submit.
+Deadline: **Monday 26 October 2026, 12:00 Europe/Lisbon. No late submissions.** Submit via the portal: app.hackmeridian.com/portal/submit. The submission is `draft` until you hit submit.
 
 ## Rules that can disqualify us
 
 From the portal "Rules & conduct" page:
 
-- [ ] **Prior work disclosed** in `README.md`. Undisclosed prior work is disqualification. Our statement: no code before 09:00 WET 25 Oct; research and design only.
-- [ ] **AI usage attributed** in `README.md` ("AI-assisted development"). Attribution is required, not permission. Update the table if a new module is mostly AI-drafted.
-- [ ] **Hackathon progress is visible.** Commit history on `main` starts after the event opened and is linear.
+- [x] **Prior work disclosed** in `README.md`. Undisclosed prior work is disqualification. Our statement: no code before 09:00 WET 25 Oct; research and design only.
+- [x] **AI usage attributed** in `README.md` ("AI-assisted development"). Attribution is required, not permission. Update the table if a new module is mostly AI-drafted.
+- [x] **Hackathon progress is visible.** Commit history on `main` starts after the event opened and is linear.
 - [ ] In person, 18+, alcohol-free event. Code of conduct applies on Discord and on site.
 
 ## Required deliverables
@@ -16,12 +16,12 @@ From the portal "Rules & conduct" page:
 | Item | Requirement | Status |
 | --- | --- | --- |
 | Public GitHub repo | Source + README + architecture overview | [x] https://github.com/Belvast-Innovation/Breakwater |
-| README | Summary, problem, setup, installation, demo instructions, how Stellar is used, prior work, AI usage | [ ] |
+| README | Summary, problem, setup, installation, demo instructions, how Stellar is used, prior work, AI usage | [x] |
 | Demo video | **2–4 minutes**, YouTube or Vimeo link | [ ] |
-| Pitch deck | PDF / PPTX / PPT / HTML, **≤ 20 MiB** | [ ] |
+| Pitch deck | PDF / PPTX / PPT / HTML, **≤ 20 MiB** | [x] `docs/deck/breakwater-pitch.pdf` (0.58 MiB) |
 | Testnet evidence | Contract IDs + at least one tx hash in README | [x] seven contract ids, five confirmed transactions besides deployment and setup: three replayed bypass payments, `create_stream`, `withdraw` |
-| Track selection | Builder: **Genesis**. Thematic: **Stellar Unlocked** (FAQ says both may be selected; check the form) | [ ] |
-| Submission form answers | Problem, target user, value proposition, what was built during the event | [ ] |
+| Track selection | Builder: **Genesis**. Thematic: **Stellar Unlocked** | [x] Genesis + Stellar Unlocked, selected in the portal draft |
+| Submission form answers | Problem, target user, value proposition, what was built during the event | [ ] draft saved; video link and deck upload pending |
 
 Developer tools may use a technical demonstration; no consumer-facing flow is required.
 
@@ -40,6 +40,8 @@ Developer tools may use a technical demonstration; no consumer-facing flow is re
 Judging is asynchronous (video, deck, repo, form). Finalists pitch live at Meridian on **Wed 28 Oct, 13:50**.
 
 ## Demo video script (target 3:00)
+
+The production storyboard, narration and assembly scripts are `docs/VIDEO.md` and `scripts/video/` (added on 26 October). The outline below was the plan written before the event.
 
 1. 0:00–0:20 — Problem: Soroban has static analysis, AI review, formal verification; no stateful fuzzing. Agent wallets and TTL make it urgent.
 2. 0:20–0:50 — Show the suite declaration: actors, one handler, one invariant. Fifteen lines.
@@ -70,10 +72,10 @@ The submitted deck is `docs/deck/breakwater-pitch.pdf` (and the editable `docs/d
 | Time | Action |
 | --- | --- |
 | 09:00 | Attend morning briefing (submission format, late policy) |
-| 09:15–10:30 | Final README read-through against `breakwater run` output |
-| 10:30–11:00 | Record video (two takes), upload to YouTube, confirm link is public |
-| 11:00–11:20 | Export deck to PDF, check size < 20 MiB |
-| 11:20–11:40 | Final `main` merge: README, docs, CI green. `git log` sanity check |
+| 09:15–10:30 | Record the narration, assemble the video (`docs/VIDEO.md`), upload it, confirm the link is public |
+| 10:30–11:00 | Upload `docs/deck/breakwater-pitch.pdf` to the portal; add the video link to the README and the form |
+| 11:00–11:20 | Final sync of the counts (commits, merged PRs, tests) in `docs/PITCH_DECK.md`, the deck and the video caption |
+| 11:20–11:40 | Final `main` merge, CI green, tag the submitted commit, `git log` sanity check |
 | 11:40 | **Submit.** Screenshot the confirmation |
 | 11:45–12:00 | Buffer. Touch nothing |
 

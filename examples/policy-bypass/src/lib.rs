@@ -1,7 +1,9 @@
 //! Demo target for the `policy-bypass` attack pack.
 //!
-//! `DemoAccount` is an unmodified OpenZeppelin `SmartAccount`. The bug the
-//! demo exhibits is not in the contract but in how the suite configures it
+//! `DemoAccount` is an OpenZeppelin `SmartAccount` with no changes besides a
+//! constructor that installs the initial context rules (an account with no
+//! rules could never authorize adding one). The bug the demo exhibits is not
+//! in the contract but in how the suite configures it
 //! (see `tests/suite.rs`): the agent's daily spending limit is installed with
 //! a window of 1 728 ledgers instead of 17 280. OpenZeppelin's `SpendingLimit`
 //! measures its window in **ledgers**, and at Stellar's ~5 s close time one
