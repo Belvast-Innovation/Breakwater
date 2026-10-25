@@ -360,6 +360,7 @@ Where AI meaningfully generated code or content:
 | Demo contracts | Scaffolding from OpenZeppelin examples | Deliberate misconfigurations, TTL bug |
 | CLI, report output, HTML report and Testnet replay scripts | Argument parsing, report formatting, first drafts of the `run` / `export` / `report` commands, the HTML renderer and `scripts/replay-testnet.sh` | UX decisions, pipeline design (how the CLI drives a suite, how an agent-signed authorization entry is spliced into a transaction), on-chain verification |
 | Logo | Generated with Google Nano Banana (Gemini image model) from the author's prompt | Concept (a wave breaking on a breakwater tetrapod), selection, cropping |
+| Demo video narration | Narration synthesised with ElevenLabs from a clone of the author's own voice (created with his consent); video assembled by scripts | Script, voice sample, review of every segment |
 | Documentation | Drafts of README, `docs/`, CI config | All claims checked against the code and Stellar docs |
 
 Stellar documentation was pulled into the AI context through the official **Raven MCP** server and the **Stellar Dev Skill** plugin. All AI-generated code was read, tested and, where needed, rewritten by the team before being committed.
