@@ -1,0 +1,60 @@
+# ---- Rust / Cargo ----
+/target/
+**/target/
+**/*.rs.bk
+*.pdb
+# keep Cargo.lock: this workspace ships binaries (CLI) and reproducibility matters
+
+# ---- Soroban / Stellar ----
+*.wasm
+!examples/**/fixtures/*.wasm
+.stellar/
+.soroban/
+*.optimized.wasm
+test_snapshots/
+*.snapshot.json
+fork-cache*.json
+
+# ---- Fuzzing ----
+fuzz/artifacts/
+fuzz/corpus/
+fuzz/coverage/
+proptest-regressions/
+breakwater-out/
+*.repro.rs.tmp
+
+# ---- Secrets (belt and braces; keys live in the Stellar CLI keystore, never here) ----
+.env
+.env.*
+*.pem
+*.key
+*.secret
+identity/
+secrets/
+
+# ---- Editors / IDE ----
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---- AI-assistant local state (never commit session data) ----
+.claude/
+!.claude/settings.json
+.cursor/
+.aider*
+
+# ---- Build / tooling caches ----
+node_modules/
+.cache/
+*.log
+*.tmp
+
+# ---- Demo / submission scratch ----
+demo/recordings/
+pitch/*.key
+pitch/~$*
