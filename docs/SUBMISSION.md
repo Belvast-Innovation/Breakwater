@@ -19,7 +19,7 @@ From the portal "Rules & conduct" page:
 | README | Summary, problem, setup, installation, demo instructions, how Stellar is used, prior work, AI usage | [ ] |
 | Demo video | **2–4 minutes**, YouTube or Vimeo link | [ ] |
 | Pitch deck | PDF / PPTX / PPT / HTML, **≤ 20 MiB** | [ ] |
-| Testnet evidence | Contract IDs + at least one tx hash in README | [x] seven contract ids, six confirmed transactions (deploys excluded): three replayed bypass payments, `create_stream`, `withdraw` |
+| Testnet evidence | Contract IDs + at least one tx hash in README | [x] seven contract ids, five confirmed transactions besides deployment and setup: three replayed bypass payments, `create_stream`, `withdraw` |
 | Track selection | Builder: **Genesis**. Thematic: **Stellar Unlocked** (FAQ says both may be selected; check the form) | [ ] |
 | Submission form answers | Problem, target user, value proposition, what was built during the event | [ ] |
 
