@@ -4,9 +4,25 @@
 //! (who may call), *handlers* (what may be called) and *invariants* (what must
 //! always hold). Breakwater generates randomized call sequences against an
 //! in-process [`soroban_sdk::Env`], checks every invariant after every step,
-//! shrinks any failing sequence and exports it as a reproducible unit test.
-//!
-//! This crate currently contains only the workspace scaffold. The `Suite`,
-//! `Handler`, `Invariant` and `Violation` types follow in the core API change.
+//! shrinks any failing sequence to a minimal reproduction and exports it.
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+
+mod actor;
+mod config;
+mod error;
+mod handler;
+mod invariant;
+mod ledger;
+mod log;
+
+pub use actor::Actor;
+pub use config::{AuthMode, SuiteConfig};
+pub use error::SuiteError;
+pub use handler::{CallOutcome, Handler, HandlerError, StepArgs};
+pub use invariant::{Invariant, Violation, ViolationKind};
+pub use ledger::LedgerAdvance;
+pub use log::{Gap, StepOutcome, StepRecord, TxLog};
+
+/// Re-export so suites can name proptest strategies without a direct dependency.
+pub use proptest;
