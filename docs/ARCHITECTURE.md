@@ -21,30 +21,33 @@ This document describes the shape of Breakwater as designed at the start of Hack
 
 ```
 Suite
- ├── actors:     [Actor]            who may call (owner, agent, attacker, …)
- ├── handlers:   [Box<dyn Handler>] what may be called, with an argument strategy
+ ├── env:        Env                post-setup environment; snapshotted for every run
+ ├── handlers:   [Box<dyn Handler>] what may be called, by which actors, with an argument strategy
  ├── invariants: [Box<dyn Invariant>] what must hold after every step
- ├── clock:      LedgerAdvance      how ledger seq / timestamp move between steps
- └── config:     seed, step range, max shrink iterations
+ ├── advance:    LedgerAdvance      how ledger seq / timestamp move between steps
+ ├── on_restore: [Fn(&Env)]         re-registers native test contracts on each restored Env
+ └── config:     SuiteConfig        seed, step range, cases, auth mode, max shrink iterations
 ```
 
 ### `Actor`
 
-A named signer with a Soroban `Address`. For the `policy-bypass` pack, actors map onto smart-account signers (owner key, agent session key, revoked key) so that the authorization path is exercised with the right credential.
+A named signer with a Soroban address. Because an `Address` is bound to the `Env` that created it and every run uses a freshly restored `Env`, an `Actor` stores the address as a strkey string and materialises it with `actor.address(&env)`. Handlers and invariants hold contract ids the same way (`Address::from_str(&env, &strkey)`). For the `policy-bypass` pack, actors map onto smart-account signers (owner key, agent session key, revoked key) so that the authorization path is exercised with the right credential.
 
 ### `Handler`
 
 ```rust
-pub trait Handler {
-    type Args: Arbitrary + Debug;
+pub trait Handler: Send + Sync + 'static {
+    type Args: Clone + Debug + Serialize + Send + Sync + 'static;
     fn name(&self) -> &'static str;
     fn actors(&self) -> &[Actor];
     fn strategy(&self) -> BoxedStrategy<Self::Args>;        // proptest
     fn call(&self, env: &Env, actor: &Actor, args: &Self::Args) -> Result<CallOutcome, HandlerError>;
 }
+
+pub enum CallOutcome { Success, ContractError(u32) }      // both are expected behaviour
 ```
 
-A handler wraps one contract function. `call` is expected to succeed or fail *gracefully* (a `contracterror`); a bare panic is reported as a bug, matching the convention in `soroban-token-fuzzer`.
+A handler wraps one contract function. `call` is expected to succeed or fail *gracefully* (a `contracterror`, reported as `CallOutcome::ContractError`). A `HandlerError` or a bare panic is treated as a bug and ends the sequence with a `Violation` of kind `handler_error` or `panic`, matching the convention in `soroban-token-fuzzer`. `Args` must be `Serialize` so that steps can be logged and exported; the suite type-erases them internally.
 
 ### `Invariant`
 
@@ -55,15 +58,16 @@ pub trait Invariant {
 }
 ```
 
-Invariants read contract state through the normal client and the `TxLog` (the sequence of steps executed so far, with outcomes). They are checked after **every** step, not only at the end, so the shrunk reproduction stops at the first violating step.
+Invariants read contract state through the normal client and the `TxLog` (the sequence of steps executed so far, with outcomes). They are checked after **every** step, not only at the end, so the shrunk reproduction stops at the first violating step. A `Violation` carries `kind` (`invariant`, `panic`, `handler_error`), `source` (the invariant or handler name, filled in by the runner), `message` and an optional JSON `detail`.
 
 ### `LedgerAdvance`
 
-Controls how `env.ledger()` moves between steps:
+Controls how `env.ledger()` moves between steps. The gap is generated as part of each step, so it is deterministic for a seed and shrinks with the sequence:
 
-- `Fixed { ledgers, seconds }`
-- `Random { ledgers: Range, seconds: Range }`
-- `Profile(Vec<(usize, Gap)>)` — a usage profile for the `ttl-archival` pack: e.g. "daily use for 30 days, then nothing for 90 days"
+- `Still`
+- `Fixed { ledgers, seconds }` (default: one ledger, five seconds)
+- `Random { ledgers: RangeInclusive<u32>, seconds: RangeInclusive<u64> }`
+- `Profile(Vec<(usize, Gap)>)` — a usage profile for the `ttl-archival` pack: e.g. "daily use for 30 days, then nothing for 90 days"; the last segment's gap repeats once the profile is exhausted
 
 ## 3. Execution pipeline
 
@@ -95,7 +99,10 @@ Controls how `env.ledger()` moves between steps:
 
 **Why `proptest-state-machine`.** It already provides sequence generation, preconditions (so we do not generate obviously invalid steps) and shrinking of sequences. Writing a custom shrinker in two days is not realistic; reusing this is the single biggest time saver in the plan.
 
-**Env reuse.** Creating a fresh `Env` per shrink candidate is slow. The runner snapshots the post-setup `Env` once (`Env::to_ledger_snapshot`) and restores from it for each candidate.
+**Env reuse.** Setting up contracts from scratch per shrink candidate is slow and non-reusable. The suite keeps the post-setup `Env` and restores a fresh one for every generated sequence and every shrink candidate with `Env::from_ledger_snapshot(base.to_ledger_snapshot())`. Two facts about `soroban-sdk` 28 shape this:
+
+- Ledger entries (instance, persistent and temporary storage, contract instances, ledger info) survive the round trip. Native Rust test contracts registered with `env.register(..)` do **not**: they live in the host, not in the ledger. The suite therefore runs the `on_restore` hooks on every restored `Env`, and the suite author re-registers native contracts there with `env.register_at(&address, Contract, ())`, which keeps the restored instance storage intact.
+- `mock_all_auths()` and the budget are per-`Env`, so the runner re-applies them on every restore.
 
 **Determinism.** Seed → sequence is reproducible. The CLI prints the seed on every failure and accepts `--seed` to replay.
 
@@ -168,4 +175,4 @@ Exit codes: `0` all invariants held, `1` violation found (reproduction exported)
 
 - Whether `proptest-state-machine` preconditions are expressive enough for the policy generators, or whether a custom `Strategy` is needed.
 - Cost of `Real` auth per step; if too slow, run `MockAll` for generation and re-verify only the shrunk sequence under `Real`.
-- Whether to export reproductions as `#[test]` functions or as a JSON step list plus a generic replay test (JSON is simpler to generate; Rust is nicer to read in a PR).
+- Whether to export reproductions as `#[test]` functions or as a JSON step list plus a generic replay test. Decided in two stages: the core `Exporter` emits the JSON step list (`suite`, `seed`, `outcome.status`, `outcome.violation`, `outcome.failing_step`, `outcome.log.steps[]`); the CLI's `export` command renders a Rust `#[test]` from it.
