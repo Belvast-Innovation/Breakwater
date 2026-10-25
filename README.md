@@ -98,7 +98,7 @@ violation found after 58 cases and 185 steps, shrunk to 3 step(s):
   #1 transfer       agent      +10 ledgers              amount_usdc=49 -> Success
   #2 transfer       agent      +1718 ledgers            amount_usdc=49 -> Success
 violation: agent spent 147 within 17280 ledgers, limit is 100 (rolling_cap)
-reproduce with --seed 7; report: /tmp/breakwater-policy-bypass-7.json
+reproduce with --seed 7; report: <temp dir>/breakwater-policy-bypass-7.json
 ```
 
 Three payments of 49 USDC, the third landing exactly one policy window (1 728 ledgers) after the first: every single call respected the 50 USDC per-call cap and the "daily" cap, yet the agent spent 147 USDC in a day. Every step ran through the host's real authorization path, so the OpenZeppelin smart account's `__check_auth` and its `SpendingLimit` policies genuinely let it through.
@@ -113,8 +113,10 @@ violation found after 63 cases and 621 steps, shrunk to 2 step(s):
   #0 create_stream  sender     +17280 ledgers (1.0 d)   amount_usdc=1000 duration_ledgers=6307200 -> Success
   #1 create_stream  sender     +1555200 ledgers (90.0 d) amount_usdc=1000 duration_ledgers=6307200 -> Success
 violation: stream 0 is archived with 275 days left to run (TTL ran out 60.0 days ago) (no_mid_lifecycle_expiry)
-reproduce with --seed 11; report: /tmp/breakwater-ttl-archival-11.json
+reproduce with --seed 11; report: <temp dir>/breakwater-ttl-archival-11.json
 ```
+
+The report is written to `std::env::temp_dir()` (`$TMPDIR` or `/tmp` on Unix) as `breakwater-<suite>-<seed>.json` unless `--json <file>` names a path.
 
 Exit codes: `0` all invariants held, `1` a violation was found, `2` usage or configuration error. Colours are off when stdout is not a terminal, when `NO_COLOR` is set, or with `--no-color`.
 
