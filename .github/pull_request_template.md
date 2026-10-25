@@ -11,7 +11,7 @@
 ```bash
 cargo test --workspace
 # plus any manual step, e.g.
-cargo run -p breakwater-cli -- run examples/policy-bypass --seed 42
+cargo run -p breakwater-cli -- run examples/policy-bypass --seed 7
 ```
 
 ## Hackathon progress

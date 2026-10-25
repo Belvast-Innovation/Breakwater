@@ -22,11 +22,11 @@ Do not install or add anything not listed here without asking.
 | Component | Version / source | Notes |
 | --- | --- | --- |
 | Rust | stable, 1.85 or newer (`rust-toolchain.toml`) | `wasm32v1-none` target required for contracts |
-| Stellar CLI | latest stable (`cargo install --locked stellar-cli`) | used for Testnet deploys and `stellar contract build` |
-| `soroban-sdk` | latest Protocol-28-compatible release, `testutils` feature | the only contract SDK in use |
-| `proptest`, `proptest-state-machine` | latest | sequence generation and shrinking |
-| OpenZeppelin `stellar-contracts` (`stellar-accounts` et al.) | pinned in `Cargo.toml` | demo target for `policy-bypass` only |
-| `clap`, `serde`, `serde_json`, `anyhow`, `thiserror` | latest | CLI and reporting |
+| Stellar CLI | 28.1.0 (`brew install stellar-cli` or `cargo install --locked stellar-cli`) | used for Testnet deploys and `stellar contract build`; CI uses `stellar/stellar-cli@v28.1.0` |
+| `soroban-sdk` | `=28.0.0` (Protocol 28), `testutils` feature | the only contract SDK in use |
+| `proptest`, `proptest-state-machine` | `=1.12.0`, `=0.9.0` | sequence generation and shrinking |
+| OpenZeppelin `stellar-contracts` (`stellar-accounts`) | `=0.8.0` | demo target for `policy-bypass` only |
+| `clap`, `serde`, `serde_json`, `anyhow`, `thiserror` | `4.6` / `1` / `1` / `1` / `2` in `Cargo.toml`; `Cargo.lock` resolves 4.6.7, 1.0.229, 1.0.154, 1.0.104, 2.0.21 | CLI and reporting |
 | `ed25519-dalek` | `=2.2.0` (pinned) | signs `AuthDigestPreimage` digests for External (Ed25519) smart-account signers; used by the `policy-bypass` pack and the example suite |
 | `soroban-fork` | not a dependency yet | supports `soroban-sdk` 25.x only; revisit once it supports SDK 28 |
 | Raven MCP | `https://raven.stellar.org/mcp` | **Use it** for any Stellar / Soroban API question before guessing. Configured in `.mcp.json`. |
@@ -159,6 +159,7 @@ If `gh api` is unavailable, set the same options manually under *Settings → Ru
 - Before writing code that touches the Soroban SDK, OpenZeppelin contracts, TTL or auth, query Raven MCP for the current API. Do not rely on memory of older SDK versions; Protocol 28 changed address credentials (`AddressV2`) and SDK surface.
 - Propose a plan for anything larger than one file, then implement. For a one-file change, just do it.
 - Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` before declaring any task done. Paste the summary line of the test run.
+- Build the five contract crates to wasm with `RUSTFLAGS="-D warnings" stellar contract build --package <crate>` as well (`example-policy-bypass`, `example-owner-account`, `example-spending-limit-policy`, `example-ed25519-verifier`, `example-ttl-archival`); CI denies warnings in that step too, and a feature-gated helper left unused in the default build has already failed it once.
 - Draft commit messages in the format above and show them before committing. Never add attribution trailers (§3).
 - When something is ambiguous about the hackathon rules, say so and ask; do not guess. The rules are summarised in `docs/SUBMISSION.md`.
 - Time-box: if an approach has not worked after two attempts, stop and say what was tried.
@@ -166,13 +167,15 @@ If `gh api` is unavailable, set the same options manually under *Settings → Ru
 
 ## 8. Timeline (Europe/Lisbon)
 
+Done on Sunday 25 October: workspace and CI, core runner with shrinking and JSON export, both attack packs with their demos finding their bugs, the CLI (`run | export | report`), Testnet deployment and the first two replayed payments.
+
 | When | What |
 | --- | --- |
-| Sun 25 Oct, now – 12:00 | Repo scaffold, CI, branch protection, core trait API |
-| Sun 13:30 – 19:00 | Suite runner, shrinking, export; `policy-bypass` pack |
-| Sun 20:30 – late | `policy-bypass` demo finds a bypass; start `ttl-archival` |
-| Mon 09:00 – 10:30 | `ttl-archival` demo; Testnet deploy + replay |
-| Mon 10:30 – 11:30 | README final, demo video (2–4 min, YouTube), pitch deck (PDF ≤ 20 MiB) |
-| Mon 11:30 – 12:00 | Submit. Buffer. Do not start anything new after 11:00. |
+| Sun 25 Oct, 17:57 | Scheduled: third replayed payment on Testnet (one policy window after the first); its hash goes into the README table |
+| Mon 09:15 – 10:30 | Confirm the third hash is in the README; final README read-through against real `breakwater run` output |
+| Mon 10:30 – 11:00 | Demo video (2–4 min, YouTube), two takes, fixed seeds 7 and 11 |
+| Mon 11:00 – 11:20 | Pitch deck to PDF (≤ 20 MiB) following `docs/SUBMISSION.md` |
+| Mon 11:20 – 11:40 | Final `main` merge, CI green, `git log` sanity check |
+| Mon 11:40 | Submit. Buffer until 12:00. Do not start anything new after 11:00. |
 
-Stretch goals (`budget-snapshot` pack, `soroban-fork` integration) only after both demos work end to end.
+Stretch goals (`budget-snapshot` pack, `soroban-fork` integration) are roadmap items, not submission work.

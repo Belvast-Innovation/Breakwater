@@ -44,7 +44,7 @@ stellar keys address breakwater-dev
 
 ```bash
 git clone https://github.com/Belvast-Innovation/Breakwater
-cd breakwater
+cd Breakwater
 cargo build --workspace
 cargo test --workspace
 ```
@@ -57,13 +57,22 @@ The workspace:
 | `breakwater-cli` | `crates/breakwater-cli` | `breakwater run \| export \| report` |
 | `breakwater-pack-policy-bypass` | `crates/packs/policy-bypass` | Invariants and generators for OpenZeppelin smart accounts |
 | `breakwater-pack-ttl-archival` | `crates/packs/ttl-archival` | Invariants and ledger-advance strategies for TTL |
-| `example-policy-bypass` | `examples/policy-bypass` | Deliberately misconfigured smart account + suite |
-| `example-ttl-archival` | `examples/ttl-archival` | Payment-stream contract that never extends TTL |
+| `example-policy-bypass` | `examples/policy-bypass` | `DemoAccount`, an OpenZeppelin smart account with a mis-sized spending window, plus the suite |
+| `example-owner-account` | `examples/policy-bypass/contracts/owner-account` | The owner's Ed25519 key account (`Signer::Delegated` of the demo account) |
+| `example-spending-limit-policy` | `examples/policy-bypass/contracts/spending-limit-policy` | OpenZeppelin `SpendingLimit` as a deployable contract |
+| `example-ed25519-verifier` | `examples/policy-bypass/contracts/ed25519-verifier` | OpenZeppelin Ed25519 verifier as a deployable contract |
+| `example-ttl-archival` | `examples/ttl-archival` | `PaymentStream`, which never extends TTL, and `PaymentStreamFixed` behind the `fixed` feature |
 
-Build the example contracts to WASM (only needed for Testnet deploys; tests link them natively):
+Not crates: `scripts/replay-testnet.sh` (Testnet replay, §8) and `docs/reports/` (HTML reports rendered by `breakwater report --html`).
+
+Build the contracts to WASM (needed for Testnet deploys; tests link them natively). This is what CI runs, with warnings denied; a bare `cargo build --target wasm32v1-none` is rejected by `soroban-sdk` 28:
 
 ```bash
+export RUSTFLAGS="-D warnings"
 stellar contract build --package example-policy-bypass
+stellar contract build --package example-owner-account
+stellar contract build --package example-spending-limit-policy
+stellar contract build --package example-ed25519-verifier
 stellar contract build --package example-ttl-archival
 ```
 
@@ -121,10 +130,11 @@ The Stellar Dev Skill plugin gives the agent up-to-date knowledge of the full St
 ## 6. Day-to-day commands
 
 ```bash
-# format, lint, test (what CI runs)
+# format, lint, test, wasm (what CI runs; the wasm step denies warnings too)
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+RUSTFLAGS="-D warnings" stellar contract build --package example-ttl-archival   # and the other four packages, see §3
 
 # run a suite with a fixed seed (drives `cargo test --test suite breakwater_suite` in that crate)
 cargo run -p breakwater-cli -- run examples/policy-bypass --seed 7 --steps 1..=10 --auth real
@@ -134,10 +144,11 @@ cargo run -p breakwater-cli -- export examples/policy-bypass --seed 7 --out exam
 cargo run -p breakwater-cli -- run examples/ttl-archival --seed 11 --json run.json
 cargo run -p breakwater-cli -- report run.json --html docs/reports/ttl-archival-seed-11.html
 
-# deploy a demo contract to Testnet
+# deploy a demo contract to Testnet (constructor arguments follow `--`)
 stellar contract deploy \
   --wasm target/wasm32v1-none/release/example_ttl_archival.wasm \
-  --source breakwater-dev --network testnet
+  --source breakwater-dev --network testnet \
+  -- --token <usdc-sac-contract-id>
 ```
 
 ## 7. Git workflow (short version; full rules in CLAUDE.md §3)
@@ -209,6 +220,7 @@ The payment-stream demo needs no custom authorization: `stellar contract deploy 
 | `error: soroban-sdk requires stellar-cli v25.2.0+ to build a contract` | Use `stellar contract build --package <crate>` instead of `cargo build --target wasm32v1-none`; SDK 28 needs the CLI's spec shaking |
 | `testutils` items missing | enable the feature: `soroban-sdk = { version = "...", features = ["testutils"] }` in `[dev-dependencies]` |
 | OpenZeppelin crate version mismatch with `soroban-sdk` | both must target the same SDK major; check `Cargo.lock` and pin, do not bump mid-event |
-| Testnet account not found | `stellar keys generate ... --fund` again, or use Friendbot: `https://friendbot.stellar.org/?addr=<G...>` |
+| Testnet account not found | `stellar keys generate <name> --network testnet --fund` again, or use Friendbot: `https://friendbot.stellar.org/?addr=<G...>` |
+| Deploy fails with insufficient balance | Uploading the 47 KB `DemoAccount` wasm cost about 7 300 XLM in Testnet resource fees; top up with `stellar keys fund breakwater-dev --network testnet` |
 | Fuzz run is slow | reuse an `Env` snapshot between iterations (`Env::from_ledger_snapshot`) instead of a fresh `Env` per step |
 | Bare `panic!` reported as a bug | that is intended; contracts must use `panic_with_error!` |

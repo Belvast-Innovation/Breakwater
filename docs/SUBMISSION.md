@@ -15,11 +15,11 @@ From the portal "Rules & conduct" page:
 
 | Item | Requirement | Status |
 | --- | --- | --- |
-| Public GitHub repo | Source + README + architecture overview | [ ] |
+| Public GitHub repo | Source + README + architecture overview | [x] https://github.com/Belvast-Innovation/Breakwater |
 | README | Summary, problem, setup, installation, demo instructions, how Stellar is used, prior work, AI usage | [ ] |
 | Demo video | **2–4 minutes**, YouTube or Vimeo link | [ ] |
 | Pitch deck | PDF / PPTX / PPT / HTML, **≤ 20 MiB** | [ ] |
-| Testnet evidence | Contract IDs + at least one tx hash in README | [ ] |
+| Testnet evidence | Contract IDs + at least one tx hash in README | [x] seven contract ids, four confirmed transactions; the third replayed payment is added when its ledger is reached |
 | Track selection | Builder: **Genesis**. Thematic: **Stellar Unlocked** (FAQ says both may be selected; check the form) | [ ] |
 | Submission form answers | Problem, target user, value proposition, what was built during the event | [ ] |
 
@@ -43,9 +43,9 @@ Judging is asynchronous (video, deck, repo, form). Finalists pitch live at Merid
 
 1. 0:00–0:20 — Problem: Soroban has static analysis, AI review, formal verification; no stateful fuzzing. Agent wallets and TTL make it urgent.
 2. 0:20–0:50 — Show the suite declaration: actors, one handler, one invariant. Fifteen lines.
-3. 0:50–1:40 — `breakwater run examples/policy-bypass`. Watch it find the three-small-payments bypass, shrink it, export the test. Open the exported test.
-4. 1:40–2:20 — `breakwater run examples/ttl-archival`. Usage profile fast-forwards; stream state expires mid-lifecycle; `withdraw` fails.
-5. 2:20–2:45 — Replay the shrunk bypass on Testnet; show the tx on stellar.expert.
+3. 0:50–1:40 — `cargo run -p breakwater-cli -- run examples/policy-bypass --seed 7`. Watch it find 49 → 49 → 49 (the third payment one 1 728-ledger window after the first), shrink it to three steps, then `export` it; open `examples/policy-bypass/tests/repro_policy_bypass_7.rs`.
+4. 1:40–2:20 — `cargo run -p breakwater-cli -- run examples/ttl-archival --seed 11`. The daily-then-silence profile fast-forwards a quarter; `no_mid_lifecycle_expiry` reports stream 0 archived with 275 days left to run. Say what that means on-chain: not a failing call, but a restore footprint and restoration fees on every later transaction.
+5. 2:20–2:45 — The same three payments replayed on Testnet through the real `__check_auth` (`scripts/replay-testnet.sh`); show the transactions on stellar.expert from the README table.
 6. 2:45–3:00 — Why it is infrastructure; roadmap; SCF.
 
 Record with a fixed seed. Keep a backup recording from the first successful run in case the live one misbehaves.
@@ -59,14 +59,14 @@ Record with a fixed seed. Keep a backup recording from the first successful run 
 5. Demo results — the two bugs found, with shrunk sequences
 6. Stellar features used — the table from README
 7. What was built this weekend — commit graph screenshot
-8. Next — crates.io, SCF, more attack packs; team
+8. Next — the README roadmap: rule-rotation probe, malicious keep-alive, restoration-cost CI gate, replay-script export; later coverage guidance, declarative auth trees, mainnet fork; crates.io and SCF; team
 
 ## Final-hour sequence (Mon 26 Oct)
 
 | Time | Action |
 | --- | --- |
 | 09:00 | Attend morning briefing (submission format, late policy) |
-| 09:15–10:30 | Finish TTL demo; Testnet deploy + replay; paste IDs into README |
+| 09:15–10:30 | Confirm the third Testnet payment hash is in the README table; final README read-through against `breakwater run` output |
 | 10:30–11:00 | Record video (two takes), upload to YouTube, confirm link is public |
 | 11:00–11:20 | Export deck to PDF, check size < 20 MiB |
 | 11:20–11:40 | Final `main` merge: README, docs, CI green. `git log` sanity check |
