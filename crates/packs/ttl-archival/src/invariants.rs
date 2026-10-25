@@ -251,6 +251,7 @@ mod tests {
             ledger_sequence: ledger,
             timestamp: 0,
             outcome: StepOutcome::Success,
+            return_value: None,
         }
     }
 

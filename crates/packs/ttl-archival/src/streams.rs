@@ -109,6 +109,7 @@ mod tests {
             } else {
                 StepOutcome::ContractError(1)
             },
+            return_value: None,
         }
     }
 

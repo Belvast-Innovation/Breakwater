@@ -59,7 +59,7 @@ impl Handler for Increment {
     ) -> Result<CallOutcome, HandlerError> {
         let id = Address::from_str(env, &self.contract);
         match CounterClient::new(env, &id).try_increment() {
-            Ok(Ok(_)) => Ok(CallOutcome::Success),
+            Ok(Ok(count)) => Ok(CallOutcome::returning(count)),
             Ok(Err(e)) => Err(HandlerError::Other(format!("conversion error: {e:?}"))),
             Err(Ok(e)) => Ok(CallOutcome::ContractError(e.get_code())),
             Err(Err(e)) => Err(HandlerError::Host(format!("{e:?}"))),

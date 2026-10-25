@@ -159,11 +159,20 @@ impl Handler for CreateStream {
             &args.duration_ledgers
         ));
         match result {
-            Ok(Ok(_)) => Ok(CallOutcome::Success),
+            Ok(Ok(id)) => Ok(CallOutcome::returning(id)),
             Ok(Err(e)) => Err(HandlerError::Other(format!("conversion: {e:?}"))),
             Err(Ok(e)) => classify(e),
             Err(Err(e)) => Err(HandlerError::Host(format!("{e:?}"))),
         }
+    }
+}
+
+/// Renders a token amount for the log: whole units when exact, else stroops.
+pub fn amount_value(stroops: i128) -> serde_json::Value {
+    if stroops % USDC == 0 {
+        serde_json::json!({ "usdc": i64::try_from(stroops / USDC).unwrap_or(i64::MAX) })
+    } else {
+        serde_json::json!({ "stroops": stroops.to_string() })
     }
 }
 
@@ -205,7 +214,7 @@ impl Handler for Withdraw {
     ) -> Result<CallOutcome, HandlerError> {
         let result = with_client!(self.fx, env, |c| c.try_withdraw(&args.stream));
         match result {
-            Ok(Ok(_)) => Ok(CallOutcome::Success),
+            Ok(Ok(paid)) => Ok(CallOutcome::returning(amount_value(paid))),
             Ok(Err(e)) => Err(HandlerError::Other(format!("conversion: {e:?}"))),
             Err(Ok(e)) => classify(e),
             Err(Err(e)) => Err(HandlerError::Host(format!("{e:?}"))),
@@ -242,7 +251,7 @@ impl Handler for Cancel {
     ) -> Result<CallOutcome, HandlerError> {
         let result = with_client!(self.fx, env, |c| c.try_cancel(&args.stream));
         match result {
-            Ok(Ok(())) => Ok(CallOutcome::Success),
+            Ok(Ok(())) => Ok(CallOutcome::returning(())),
             Ok(Err(e)) => Err(HandlerError::Other(format!("conversion: {e:?}"))),
             Err(Ok(e)) => classify(e),
             Err(Err(e)) => Err(HandlerError::Host(format!("{e:?}"))),

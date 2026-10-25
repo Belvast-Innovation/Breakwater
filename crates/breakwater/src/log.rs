@@ -66,6 +66,9 @@ pub struct StepRecord {
     pub timestamp: u64,
     /// Result of the call.
     pub outcome: StepOutcome,
+    /// The contract's return value, when the handler reported one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_value: Option<serde_json::Value>,
 }
 
 /// The steps executed so far in the current sequence, oldest first.
