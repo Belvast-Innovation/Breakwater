@@ -1,6 +1,32 @@
-# Breakwater
+<div align="center">
 
-**Foundry-style invariant testing for Soroban.**
+<img src="docs/assets/breakwater-logo.png" width="360" alt="Breakwater logo: a wave breaking on a tetrapod">
+
+<h1>Breakwater</h1>
+
+<p><strong>Foundry-style invariant testing for Soroban.</strong></p>
+
+<p>
+  <a href="https://github.com/Belvast-Innovation/Breakwater/actions/workflows/ci.yml"><img src="https://github.com/Belvast-Innovation/Breakwater/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-blue" alt="License: Apache-2.0"></a>
+  <a href="https://github.com/Belvast-Innovation/Breakwater/commits/main"><img src="https://img.shields.io/github/last-commit/Belvast-Innovation/Breakwater" alt="Last commit"></a>
+  <a href="https://www.conventionalcommits.org/en/v1.0.0/"><img src="https://img.shields.io/badge/Conventional%20Commits-1.0.0-FE5196?logo=conventionalcommits&logoColor=white" alt="Conventional Commits 1.0.0"></a>
+</p>
+<p>
+  <a href="Cargo.toml"><img src="https://img.shields.io/badge/Rust-1.91+-B7410E?logo=rust&logoColor=white" alt="Rust 1.91+"></a>
+  <a href="https://docs.rs/soroban-sdk/28.0.0"><img src="https://img.shields.io/badge/soroban--sdk-28.0.0-7D00FF?logo=stellar&logoColor=white" alt="soroban-sdk 28.0.0"></a>
+  <a href="https://stellar.org/blog/developers/introducing-adapter-protocol-28-on-stellar"><img src="https://img.shields.io/badge/Stellar-Protocol%2028-000000?logo=stellar&logoColor=white" alt="Stellar Protocol 28"></a>
+  <a href="https://github.com/stellar/stellar-cli/releases/tag/v28.1.0"><img src="https://img.shields.io/badge/Stellar%20CLI-28.1.0-000000?logo=stellar&logoColor=white" alt="Stellar CLI 28.1.0"></a>
+  <a href="https://crates.io/crates/stellar-accounts/0.8.0"><img src="https://img.shields.io/badge/OpenZeppelin%20stellar--accounts-0.8.0-4E5EE4?logo=openzeppelin&logoColor=white" alt="OpenZeppelin stellar-accounts 0.8.0"></a>
+  <a href="https://crates.io/crates/proptest/1.12.0"><img src="https://img.shields.io/badge/proptest-1.12-orange" alt="proptest 1.12"></a>
+</p>
+<p>
+  <a href="#testnet-evidence"><img src="https://img.shields.io/badge/Stellar-Testnet-000000?logo=stellar&logoColor=white" alt="Stellar Testnet"></a>
+  <a href="docs/SUBMISSION.md"><img src="https://img.shields.io/badge/HackMeridian%202026-Genesis%20%C2%B7%20Stellar%20Unlocked-FDDA24" alt="HackMeridian 2026 · Genesis · Stellar Unlocked"></a>
+  <a href="docs/deck/breakwater-pitch.pdf"><img src="https://img.shields.io/badge/Pitch%20deck-PDF-0F0F0F" alt="Pitch deck"></a>
+</p>
+
+</div>
 
 Breakwater is a Rust framework and CLI for stateful property testing of Stellar smart contracts. You declare *actors* (who can call), *handlers* (what they can call) and *invariants* (what must always hold). Breakwater generates randomized multi-step transaction sequences against a local Soroban `Env`, checks every invariant after every step, shrinks any failing sequence to its minimal form, and exports it as a reproducible Rust unit test.
 
@@ -292,6 +318,7 @@ Breakwater/
 ├── scripts/
 │   └── replay-testnet.sh            # replays an exported sequence on Testnet
 ├── docs/
+│   ├── assets/                      # logo (source and README size) and social preview image
 │   ├── ARCHITECTURE.md
 │   ├── DEVELOPMENT.md
 │   ├── SUBMISSION.md
@@ -332,6 +359,7 @@ Where AI meaningfully generated code or content:
 | Attack packs | First drafts of invariant implementations from written specs | Threat modelling, choice of invariants, verification against real contracts |
 | Demo contracts | Scaffolding from OpenZeppelin examples | Deliberate misconfigurations, TTL bug |
 | CLI, report output, HTML report and Testnet replay scripts | Argument parsing, report formatting, first drafts of the `run` / `export` / `report` commands, the HTML renderer and `scripts/replay-testnet.sh` | UX decisions, pipeline design (how the CLI drives a suite, how an agent-signed authorization entry is spliced into a transaction), on-chain verification |
+| Logo | Generated with Google Nano Banana (Gemini image model) from the author's prompt | Concept (a wave breaking on a breakwater tetrapod), selection, cropping |
 | Documentation | Drafts of README, `docs/`, CI config | All claims checked against the code and Stellar docs |
 
 Stellar documentation was pulled into the AI context through the official **Raven MCP** server and the **Stellar Dev Skill** plugin. All AI-generated code was read, tested and, where needed, rewritten by the team before being committed.
