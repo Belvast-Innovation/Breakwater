@@ -27,6 +27,7 @@ Do not install or add anything not listed here without asking.
 | `proptest`, `proptest-state-machine` | latest | sequence generation and shrinking |
 | OpenZeppelin `stellar-contracts` (`stellar-accounts` et al.) | pinned in `Cargo.toml` | demo target for `policy-bypass` only |
 | `clap`, `serde`, `serde_json`, `anyhow`, `thiserror` | latest | CLI and reporting |
+| `ed25519-dalek` | `=2.2.0` (pinned) | signs `AuthDigestPreimage` digests for External (Ed25519) smart-account signers; used by the `policy-bypass` pack and the example suite |
 | `soroban-fork` | not a dependency yet | supports `soroban-sdk` 25.x only; revisit once it supports SDK 28 |
 | Raven MCP | `https://raven.stellar.org/mcp` | **Use it** for any Stellar / Soroban API question before guessing. Configured in `.mcp.json`. |
 | Stellar Dev Skill | Claude Code plugin | loaded; prefer it for SDK idioms |

@@ -19,6 +19,7 @@
 #![warn(missing_docs)]
 
 mod actor;
+pub mod auth;
 mod config;
 mod error;
 mod export;
@@ -34,7 +35,7 @@ pub use actor::Actor;
 pub use config::{AuthMode, SuiteConfig};
 pub use error::SuiteError;
 pub use export::Exporter;
-pub use handler::{CallOutcome, Handler, HandlerError, StepArgs};
+pub use handler::{CallContext, CallOutcome, Handler, HandlerError, StepArgs};
 pub use invariant::{Invariant, Violation, ViolationKind};
 pub use ledger::LedgerAdvance;
 pub use log::{Gap, StepOutcome, StepRecord, TxLog};

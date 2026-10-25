@@ -1,37 +1,53 @@
 //! Demo target for the `policy-bypass` attack pack.
 //!
-//! The real contract (an OpenZeppelin smart account with an agent signer and a
-//! deliberately weak spending policy) lands with the pack. This scaffold only
-//! establishes the crate layout and the error-handling convention: contract
-//! errors are declared with `contracterror` and raised with `panic_with_error!`,
-//! never with a bare `panic!`, because Breakwater reports a bare panic as a bug.
+//! `DemoAccount` is an unmodified OpenZeppelin `SmartAccount`. The bug the
+//! demo exhibits is not in the contract but in how the suite configures it
+//! (see `tests/suite.rs`): the agent's daily spending limit is installed with
+//! a window of 1 728 ledgers instead of 17 280. OpenZeppelin's `SpendingLimit`
+//! measures its window in **ledgers**, and at Stellar's ~5 s close time one
+//! day is 86 400 / 5 = 17 280 ledgers. Dividing by 50 instead of 5 is the kind
+//! of unit slip an operator makes once, and it turns "100 USDC per day" into
+//! "100 USDC per 2.4 hours".
+//!
+//! With the `helpers` feature the crate also ships the three auxiliary
+//! contracts the suite deploys next to the account: an owner key account, a
+//! spending-limit policy and an Ed25519 verifier.
 #![no_std]
 
-use soroban_sdk::{contract, contracterror, contractimpl, panic_with_error, Env};
+use soroban_sdk::auth::{Context, CustomAccountInterface};
+use soroban_sdk::crypto::Hash;
+// The `contracttrait` expansion of `SmartAccount` names these types unqualified.
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Map, String, Val, Vec};
+use stellar_accounts::smart_account::{
+    do_check_auth, AuthDigestPreimage, AuthPayload, ContextRule, ContextRuleType, Signer,
+    SmartAccount, SmartAccountError,
+};
 
-/// Errors raised by the demo contract.
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    /// The supplied value was zero.
-    ZeroValue = 1,
-}
-
-/// Placeholder contract; replaced by the smart-account demo in a later change.
+/// An OpenZeppelin smart account with no customisation.
 #[contract]
-pub struct DemoWallet;
+pub struct DemoAccount;
 
 #[contractimpl]
-impl DemoWallet {
-    /// Returns `value` unchanged, or fails with [`Error::ZeroValue`] when it is zero.
-    pub fn ping(env: Env, value: u32) -> u32 {
-        if value == 0 {
-            panic_with_error!(&env, Error::ZeroValue);
-        }
-        value
+impl CustomAccountInterface for DemoAccount {
+    type Error = SmartAccountError;
+    type Signature = AuthPayload;
+
+    #[allow(non_snake_case)]
+    fn __check_auth(
+        e: Env,
+        signature_payload: Hash<32>,
+        signatures: AuthPayload,
+        auth_contexts: Vec<Context>,
+    ) -> Result<(), Self::Error> {
+        do_check_auth(&e, &signature_payload, &signatures, &auth_contexts)
     }
 }
+
+#[contractimpl(contracttrait)]
+impl SmartAccount for DemoAccount {}
+
+#[cfg(any(test, feature = "helpers"))]
+pub mod helpers;
 
 #[cfg(test)]
 mod test;

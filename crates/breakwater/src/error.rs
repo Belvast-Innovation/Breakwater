@@ -2,8 +2,6 @@
 
 use thiserror::Error;
 
-use crate::config::AuthMode;
-
 /// Errors returned by [`crate::Suite::run`] and the exporter.
 #[derive(Debug, Error)]
 pub enum SuiteError {
@@ -19,9 +17,6 @@ pub enum SuiteError {
     /// The configured step range is empty.
     #[error("step range is empty")]
     EmptySteps,
-    /// The requested authorization mode is not implemented yet.
-    #[error("authorization mode {0:?} is not implemented yet")]
-    UnsupportedAuthMode(AuthMode),
     /// proptest aborted the run, for example after too many rejected cases.
     #[error("fuzzing aborted: {0}")]
     Aborted(String),

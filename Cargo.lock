@@ -366,6 +366,10 @@ name = "breakwater-pack-policy-bypass"
 version = "0.1.0"
 dependencies = [
  "breakwater",
+ "ed25519-dalek",
+ "proptest",
+ "serde",
+ "serde_json",
  "soroban-sdk",
  "stellar-accounts",
 ]
@@ -979,6 +983,10 @@ version = "0.1.0"
 dependencies = [
  "breakwater",
  "breakwater-pack-policy-bypass",
+ "ed25519-dalek",
+ "example-policy-bypass",
+ "serde",
+ "serde_json",
  "soroban-sdk",
  "stellar-accounts",
 ]

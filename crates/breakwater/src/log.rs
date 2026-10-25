@@ -21,6 +21,8 @@ pub enum StepOutcome {
     Success,
     /// The contract rejected the call with a `contracterror` code.
     ContractError(u32),
+    /// The host rejected the call's authorization.
+    Unauthorized,
     /// The handler returned an error that is not a contract error.
     HandlerError(String),
     /// The call panicked.
@@ -93,6 +95,12 @@ impl TxLog {
         handler: &'a str,
     ) -> impl Iterator<Item = &'a StepRecord> + 'a {
         self.successes().filter(move |s| s.handler == handler)
+    }
+
+    /// Builds a log from existing records, for example when replaying an
+    /// exported sequence or testing an invariant against a known-bad history.
+    pub fn from_records(steps: Vec<StepRecord>) -> Self {
+        Self { steps }
     }
 
     pub(crate) fn push(&mut self, record: StepRecord) {

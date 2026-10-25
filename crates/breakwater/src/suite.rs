@@ -7,7 +7,7 @@ use proptest::test_runner::{Config, RngAlgorithm, TestCaseError, TestError, Test
 use serde::{Deserialize, Serialize};
 use soroban_sdk::Env;
 
-use crate::config::{AuthMode, SuiteConfig};
+use crate::config::SuiteConfig;
 use crate::error::SuiteError;
 use crate::handler::{DynHandler, Handler};
 use crate::invariant::{Invariant, Violation};
@@ -173,6 +173,7 @@ impl Suite {
             suite: name,
             seed: config.seed,
             cases_run: cases_run.into_inner(),
+            steps_run: runner.steps_executed(),
             outcome,
         })
     }
@@ -189,9 +190,6 @@ impl Suite {
         }
         if self.config.steps.is_empty() {
             return Err(SuiteError::EmptySteps);
-        }
-        if self.config.auth != AuthMode::MockAll {
-            return Err(SuiteError::UnsupportedAuthMode(self.config.auth));
         }
         Ok(())
     }
@@ -228,6 +226,8 @@ pub struct RunReport {
     pub seed: u64,
     /// Sequences executed, including shrink candidates.
     pub cases_run: u32,
+    /// Steps executed across all sequences and shrink candidates.
+    pub steps_run: u64,
     /// Whether the invariants held.
     pub outcome: Outcome,
 }

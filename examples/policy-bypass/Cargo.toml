@@ -1,6 +1,6 @@
 [package]
 name = "example-policy-bypass"
-description = "Deliberately misconfigured smart account used as the policy-bypass demo target"
+description = "Deliberately misconfigured OpenZeppelin smart account used as the policy-bypass demo target"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,6 +12,12 @@ publish.workspace = true
 crate-type = ["lib", "cdylib"]
 doctest = false
 
+[features]
+# Helper contracts (owner key account, spending-limit policy, Ed25519 verifier)
+# used by the suite. Off by default so the wasm build exports only DemoAccount:
+# several contracts in one cdylib would collide on `__check_auth` and `install`.
+helpers = []
+
 [dependencies]
 soroban-sdk = { workspace = true }
 stellar-accounts = { workspace = true }
@@ -20,3 +26,7 @@ stellar-accounts = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
 breakwater = { workspace = true }
 breakwater-pack-policy-bypass = { workspace = true }
+ed25519-dalek = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+example-policy-bypass = { path = ".", features = ["helpers"] }

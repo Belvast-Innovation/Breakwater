@@ -1,14 +1,14 @@
 //! Executes a sequence of steps against a fresh `Env` and checks invariants.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use soroban_sdk::testutils::EnvTestConfig;
 use soroban_sdk::Env;
 
 use crate::config::{AuthMode, SuiteConfig};
-use crate::handler::{CallOutcome, DynHandler};
+use crate::handler::{CallContext, CallOutcome, DynHandler};
 use crate::invariant::{Invariant, Violation};
 use crate::ledger::LedgerAdvance;
 use crate::log::{StepOutcome, StepRecord, TxLog};
@@ -34,6 +34,7 @@ pub(crate) struct Runner {
     invariants: Arc<[Box<dyn Invariant>]>,
     restore_hooks: Arc<[RestoreHook]>,
     config: SuiteConfig,
+    steps_executed: AtomicU64,
 }
 
 impl Runner {
@@ -50,7 +51,13 @@ impl Runner {
             invariants,
             restore_hooks,
             config,
+            steps_executed: AtomicU64::new(0),
         }
+    }
+
+    /// Total steps executed so far, across all sequences and shrink candidates.
+    pub(crate) fn steps_executed(&self) -> u64 {
+        self.steps_executed.load(Ordering::Relaxed)
     }
 
     /// Restores the post-setup `Env` from the snapshot.
@@ -61,7 +68,7 @@ impl Runner {
         });
         match self.config.auth {
             AuthMode::MockAll => env.mock_all_auths(),
-            // Validated away in `Suite::run`; kept explicit for when `Real` lands.
+            // Handlers install real authorization entries themselves.
             AuthMode::Real => {}
         }
         if self.config.unlimited_budget {
@@ -91,14 +98,21 @@ impl Runner {
             LedgerAdvance::apply(&env, &step.gap);
             let handler = &self.handlers[step.handler];
             let actor = handler.actors()[step.actor].clone();
+            let ctx = CallContext {
+                step: index,
+                auth: self.config.auth,
+            };
+            self.steps_executed.fetch_add(1, Ordering::Relaxed);
 
-            let outcome =
-                match catch_unwind(AssertUnwindSafe(|| handler.call(&env, &actor, &step.args))) {
-                    Ok(Ok(CallOutcome::Success)) => StepOutcome::Success,
-                    Ok(Ok(CallOutcome::ContractError(code))) => StepOutcome::ContractError(code),
-                    Ok(Err(err)) => StepOutcome::HandlerError(err.to_string()),
-                    Err(payload) => StepOutcome::Panic(panic_message(payload.as_ref())),
-                };
+            let outcome = match catch_unwind(AssertUnwindSafe(|| {
+                handler.call(&env, &ctx, &actor, &step.args)
+            })) {
+                Ok(Ok(CallOutcome::Success)) => StepOutcome::Success,
+                Ok(Ok(CallOutcome::ContractError(code))) => StepOutcome::ContractError(code),
+                Ok(Ok(CallOutcome::Unauthorized)) => StepOutcome::Unauthorized,
+                Ok(Err(err)) => StepOutcome::HandlerError(err.to_string()),
+                Err(payload) => StepOutcome::Panic(panic_message(payload.as_ref())),
+            };
 
             log.push(StepRecord {
                 index,
@@ -116,7 +130,9 @@ impl Runner {
                 StepOutcome::HandlerError(message) => {
                     Some(Violation::handler_error(handler.name(), message))
                 }
-                StepOutcome::Success | StepOutcome::ContractError(_) => None,
+                StepOutcome::Success
+                | StepOutcome::ContractError(_)
+                | StepOutcome::Unauthorized => None,
             };
             if let Some(violation) = step_failure {
                 return Execution {

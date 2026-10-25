@@ -10,6 +10,7 @@ use soroban_sdk::Env;
 use thiserror::Error;
 
 use crate::actor::Actor;
+use crate::config::AuthMode;
 
 /// Result of a handler call that completed without a bug.
 ///
@@ -23,6 +24,31 @@ pub enum CallOutcome {
     Success,
     /// The contract rejected the call with the given `contracterror` code.
     ContractError(u32),
+    /// The host rejected the call's authorization (a policy or signer check
+    /// failed). Expected behaviour when fuzzing authorization.
+    Unauthorized,
+}
+
+/// Per-step information a handler may need to build real authorization.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CallContext {
+    /// Zero-based index of the step in the sequence.
+    pub step: usize,
+    /// Authorization mode of the running suite.
+    pub auth: AuthMode,
+}
+
+impl CallContext {
+    /// A nonce that is unique per step, so one address can authorize one call
+    /// per step without nonce reuse.
+    pub fn nonce(&self) -> i64 {
+        self.step as i64 + 1
+    }
+
+    /// A signature expiration ledger comfortably ahead of the current one.
+    pub fn signature_expiration_ledger(&self, env: &Env) -> u32 {
+        env.ledger().sequence().saturating_add(100)
+    }
 }
 
 /// A handler call failed for a reason other than a graceful contract error.
@@ -60,9 +86,14 @@ pub trait Handler: Send + Sync + 'static {
     fn strategy(&self) -> BoxedStrategy<Self::Args>;
 
     /// Performs the call as `actor` with `args`.
+    ///
+    /// In [`AuthMode::Real`] the handler must install the authorization
+    /// entries the call needs with `env.set_auths(..)` before invoking; see
+    /// [`crate::auth`].
     fn call(
         &self,
         env: &Env,
+        ctx: &CallContext,
         actor: &Actor,
         args: &Self::Args,
     ) -> Result<CallOutcome, HandlerError>;
@@ -113,7 +144,13 @@ pub(crate) trait DynHandler: Send + Sync {
     fn name(&self) -> &'static str;
     fn actors(&self) -> &[Actor];
     fn strategy(&self) -> BoxedStrategy<StepArgs>;
-    fn call(&self, env: &Env, actor: &Actor, args: &StepArgs) -> Result<CallOutcome, HandlerError>;
+    fn call(
+        &self,
+        env: &Env,
+        ctx: &CallContext,
+        actor: &Actor,
+        args: &StepArgs,
+    ) -> Result<CallOutcome, HandlerError>;
 }
 
 impl<H: Handler> DynHandler for H {
@@ -131,10 +168,16 @@ impl<H: Handler> DynHandler for H {
             .boxed()
     }
 
-    fn call(&self, env: &Env, actor: &Actor, args: &StepArgs) -> Result<CallOutcome, HandlerError> {
+    fn call(
+        &self,
+        env: &Env,
+        ctx: &CallContext,
+        actor: &Actor,
+        args: &StepArgs,
+    ) -> Result<CallOutcome, HandlerError> {
         let args = args
             .downcast::<H::Args>()
             .ok_or_else(|| HandlerError::ArgsMismatch(Handler::name(self)))?;
-        Handler::call(self, env, actor, args)
+        Handler::call(self, env, ctx, actor, args)
     }
 }

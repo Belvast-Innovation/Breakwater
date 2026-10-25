@@ -11,8 +11,9 @@ pub enum AuthMode {
     /// `env.mock_all_auths()`: every `require_auth` passes. Use when
     /// authorization is not what is under test.
     MockAll,
-    /// Build real authorization trees so custom accounts' `__check_auth`
-    /// runs. Not implemented yet; lands with the `policy-bypass` pack.
+    /// No mocking: handlers install real authorization entries with
+    /// `env.set_auths(..)`, so custom accounts' `__check_auth` and their
+    /// policies really run. See [`crate::auth`].
     Real,
 }
 
