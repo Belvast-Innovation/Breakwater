@@ -36,7 +36,7 @@ stellar network add testnet \
   --rpc-url https://soroban-testnet.stellar.org:443 \
   --network-passphrase "Test SDF Network ; September 2015"
 
-stellar keys generate --global breakwater-dev --network testnet --fund
+stellar keys generate breakwater-dev --network testnet --fund
 stellar keys address breakwater-dev
 ```
 
@@ -185,7 +185,21 @@ State (contract ids, completed steps, ledger of the last step) lives in `breakwa
 
 How an agent payment is submitted: `stellar contract invoke --build-only` simulates `usdc.transfer(account, merchant, amount)` and records an authorization entry for the smart account; the script reads that entry's nonce, expiration ledger and root invocation, has `oz-auth-entry` (a binary in the `policy-bypass` pack) sign the OpenZeppelin `AuthPayload` for it with the agent key, splices the signed entry back into the envelope (`stellar tx decode` / `stellar xdr encode` / `stellar tx encode`), signs with the source key and sends. Signer seeds reach the helper only through the environment, read by `stellar keys secret`; nothing secret is printed or written.
 
-Two things the on-chain path needs that the local demo does not, both deliberately left out of the test suite: `DemoAccount` needs a constructor that installs the initial context rules (an account with zero rules can never authorize `add_context_rule` on itself), and the helper contracts need their own crates, because one cdylib cannot export two `__check_auth` functions.
+Two things the on-chain path needs that the local demo does not: `DemoAccount` has a constructor that installs the initial context rules (an account with zero rules can never authorize `add_context_rule` on itself; the test suite passes an empty list), and the helper contracts are separate crates under `examples/policy-bypass/contracts/`, because one cdylib cannot export two `__check_auth` functions. `stellar contract build --package <crate>` builds each one.
+
+Deployed on Testnet on 25 October 2026 (protocol 29 accepted the SDK 28 wasm; the smart account's 47 KB upload cost about 7 300 XLM in Testnet resource fees, so fund the source account generously or run `stellar keys fund`):
+
+| Contract | Id |
+| --- | --- |
+| `DemoAccount` | `CBKDNENFLCLUE3U4NH55T5N5JIX6S6WS2FFDXCPWMXJM7ZQGPXVH3HJI` |
+| `SpendingLimitPolicy` (per call) | `CCIEVOGO6RZSCHN6COE3NLMDT3WOXSPTDPYDJMPVSULFREACAJ6CS247` |
+| `SpendingLimitPolicy` ("daily") | `CC6Z5UZYWG5CR43YYGUZCMOGQHO2NEQZIU7M4MBR2NG3ELZQN7G2RRD7` |
+| `Ed25519Verifier` | `CA7UFPQ3MHRQGIOHG6B5TPBJZLZL6HCNCYNWPILVDDC6AHOMM5BJ5OJN` |
+| `OwnerAccount` | `CC2N5OKRJ5MA2SEVIUSRSMPRODN73Z2OH6CYZ7YHIZVAVD72N6K4PSCB` |
+| `USDC` Stellar Asset Contract | `CDDSS44LN2N4TNVTDH42PLEVHKDB5OZQRBHAD2KQRH6LIADRIBUMPDMM` |
+| `PaymentStream` | `CBS6AO2L5RKKLHIC2FJOH66UIL2OHCPSSO6GAUCYNXMMI3RRQLG3D5KP` |
+
+The payment-stream demo needs no custom authorization: `stellar contract deploy ... -- --token <sac>`, then `invoke -- create_stream --sender <G> --recipient <G> --amount 10000000000 --duration_ledgers 6307200` as the sender and `invoke --source <recipient> -- withdraw --id 0` as the recipient. Testnet closes a ledger about every 5 s (measured 31 ledgers in 155 s), so one policy window of 1 728 ledgers is about 2 h 25 min.
 
 ## 9. Troubleshooting
 
