@@ -33,6 +33,32 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      # Both demos must find their bug: `breakwater run` exits 1 on a violation,
+      # so 0 (nothing found) or 2 (usage or setup error) fails the build. A relative
+      # --json path from the repository root must produce a report the CLI can render.
+      - name: Smoke-test the CLI demos
+        run: |
+          set +e
+          cargo build -q -p breakwater-cli
+          cli=target/debug/breakwater
+          for demo in "policy-bypass 7" "ttl-archival 11"; do
+            set -- $demo
+            "$cli" --no-color run "examples/$1" --seed "$2"
+            code=$?
+            if [ "$code" -ne 1 ]; then
+              echo "::error::breakwater run examples/$1 --seed $2 exited with $code, expected 1"
+              exit 1
+            fi
+          done
+          "$cli" --no-color run examples/policy-bypass --seed 7 --json run.json
+          [ $? -eq 1 ] || { echo "::error::run --json run.json did not report the violation"; exit 1; }
+          "$cli" --no-color report run.json --html report.html
+          code=$?
+          [ "$code" -le 1 ] || { echo "::error::report exited with $code"; exit 1; }
+          test -s run.json || { echo "::error::run.json was not written"; exit 1; }
+          test -s report.html || { echo "::error::report.html was not written"; exit 1; }
+          rm -f run.json report.html
+
       # soroban-sdk 28 refuses a bare `cargo build --target wasm32v1-none`: its build
       # script requires the spec-shaking support that only `stellar contract build` provides.
       - uses: stellar/stellar-cli@v28.1.0

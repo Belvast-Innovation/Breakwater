@@ -38,14 +38,29 @@ pub fn default_report_path(dir: &Path, seed: Option<u64>) -> PathBuf {
     std::env::temp_dir().join(format!("breakwater-{name}-{seed}.json"))
 }
 
+/// The report path as an absolute path.
+///
+/// The suite runs as a `cargo test` child process whose working directory is
+/// the suite crate, while the CLI reads the report from the caller's working
+/// directory. A relative path would name two different files, so it is
+/// resolved against the caller's directory before either side sees it. The
+/// same applies to the default path if `TMPDIR` is relative.
+pub fn resolve_report_path(
+    report: Option<&Path>,
+    dir: &Path,
+    seed: Option<u64>,
+) -> anyhow::Result<PathBuf> {
+    let path = report
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| default_report_path(dir, seed));
+    std::path::absolute(&path).with_context(|| format!("resolving {}", path.display()))
+}
+
 /// Runs `cargo test --test suite breakwater_suite` in `dir` with the
 /// Breakwater environment and returns the report the suite wrote.
 pub fn run(dir: &Path, params: &RunParams<'_>) -> anyhow::Result<(RunReport, PathBuf)> {
     let manifest = validate_suite_dir(dir)?;
-    let report_path = params
-        .report
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| default_report_path(dir, params.seed));
+    let report_path = resolve_report_path(params.report, dir, params.seed)?;
     if let Some(parent) = report_path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
@@ -86,4 +101,39 @@ pub fn run(dir: &Path, params: &RunParams<'_>) -> anyhow::Result<(RunReport, Pat
         }
     };
     Ok((report, report_path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relative_report_path_is_resolved_against_the_callers_directory() {
+        let cwd = std::env::current_dir().expect("cwd");
+        let resolved = resolve_report_path(
+            Some(Path::new("run.json")),
+            Path::new("examples/demo"),
+            Some(7),
+        )
+        .expect("resolves");
+        assert!(resolved.is_absolute());
+        assert_eq!(resolved, cwd.join("run.json"));
+    }
+
+    #[test]
+    fn absolute_report_path_is_kept() {
+        let abs = std::env::temp_dir().join("breakwater-abs.json");
+        let abs = std::path::absolute(&abs).expect("absolute");
+        let resolved =
+            resolve_report_path(Some(&abs), Path::new("examples/demo"), None).expect("resolves");
+        assert_eq!(resolved, abs);
+    }
+
+    #[test]
+    fn default_report_path_is_absolute() {
+        let resolved = resolve_report_path(None, Path::new("examples/policy-bypass"), Some(7))
+            .expect("resolves");
+        assert!(resolved.is_absolute());
+        assert!(resolved.ends_with("breakwater-policy-bypass-7.json"));
+    }
 }
