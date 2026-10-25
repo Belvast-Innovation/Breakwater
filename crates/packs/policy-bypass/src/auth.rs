@@ -30,9 +30,29 @@ pub fn authorize(
     root: SorobanAuthorizedInvocation,
     ctx: &CallContext,
 ) -> Result<Vec<SorobanAuthorizationEntry>, AuthError> {
-    let nonce = ctx.nonce();
-    let expiration = ctx.signature_expiration_ledger(env);
+    authorize_with(
+        env,
+        account,
+        key,
+        rule_id,
+        root,
+        ctx.nonce(),
+        ctx.signature_expiration_ledger(env),
+    )
+}
 
+/// Same as [`authorize`] with an explicit nonce and signature expiration
+/// ledger, for callers that must match values chosen elsewhere, for example
+/// the entry a transaction simulation recorded.
+pub fn authorize_with(
+    env: &Env,
+    account: &Address,
+    key: &SignerKey,
+    rule_id: u32,
+    root: SorobanAuthorizedInvocation,
+    nonce: i64,
+    expiration: u32,
+) -> Result<Vec<SorobanAuthorizationEntry>, AuthError> {
     let preimage = AuthDigestPreimage {
         account: account.clone(),
         signature_payload: signature_payload(env, nonce, expiration, &root)?,

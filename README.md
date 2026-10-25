@@ -211,13 +211,24 @@ Breakwater is infrastructure, so "use of Stellar" means use of the protocol itse
 
 ## Testnet evidence
 
-Replaying a shrunk failing sequence on Testnet is part of the demo. Contract IDs and transaction hashes are filled in at submission time:
+Replaying a shrunk failing sequence on Testnet is part of the demo (`scripts/replay-testnet.sh`, see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md#8-replaying-on-testnet)). Local fuzzing stays local; only the exported reproduction goes on-chain. Contract IDs and transaction hashes are filled in at submission time:
 
 | Item | Value |
 | --- | --- |
-| Demo smart-account contract (policy-bypass) | `C...` |
-| Demo payment-stream contract (ttl-archival) | `C...` |
-| Replayed bypass sequence | `https://stellar.expert/explorer/testnet/tx/...` |
+| Demo smart-account contract (policy-bypass) | [`CBKDNENFLCLUE3U4NH55T5N5JIX6S6WS2FFDXCPWMXJM7ZQGPXVH3HJI`](https://stellar.expert/explorer/testnet/contract/CBKDNENFLCLUE3U4NH55T5N5JIX6S6WS2FFDXCPWMXJM7ZQGPXVH3HJI) |
+| Spending-limit policies (50 USDC per ledger, 100 USDC per 1 728 ledgers) | [`CCIEVOGO…CS247`](https://stellar.expert/explorer/testnet/contract/CCIEVOGO6RZSCHN6COE3NLMDT3WOXSPTDPYDJMPVSULFREACAJ6CS247), [`CC6Z5UZY…RRD7`](https://stellar.expert/explorer/testnet/contract/CC6Z5UZYWG5CR43YYGUZCMOGQHO2NEQZIU7M4MBR2NG3ELZQN7G2RRD7) |
+| Ed25519 verifier, owner key account | [`CA7UFPQ3…5OJN`](https://stellar.expert/explorer/testnet/contract/CA7UFPQ3MHRQGIOHG6B5TPBJZLZL6HCNCYNWPILVDDC6AHOMM5BJ5OJN), [`CC2N5OKR…PSCB`](https://stellar.expert/explorer/testnet/contract/CC2N5OKRJ5MA2SEVIUSRSMPRODN73Z2OH6CYZ7YHIZVAVD72N6K4PSCB) |
+| Test asset `USDC` (Stellar Asset Contract) | [`CDDSS44L…PDMM`](https://stellar.expert/explorer/testnet/contract/CDDSS44LN2N4TNVTDH42PLEVHKDB5OZQRBHAD2KQRH6LIADRIBUMPDMM) |
+| Replayed bypass: payment 1 (49 USDC, ledger 5383703) | [`b5ea4498…6772`](https://stellar.expert/explorer/testnet/tx/b5ea44983473462379a6909abc335105a040f6d4fee83908cf97dee49cec6772) |
+| Replayed bypass: payment 2 (49 USDC, ledger 5383715) | [`82be1eb8…5608`](https://stellar.expert/explorer/testnet/tx/82be1eb8d373bf91aecc9ca4743041ea1f50d1961f7b5fb7ba7a3f9add1e5608) |
+| Replayed bypass: payment 3 (49 USDC, one window after payment 1) | pending until ledger 5385433 |
+| Demo payment-stream contract (ttl-archival) | [`CBS6AO2L5RKKLHIC2FJOH66UIL2OHCPSSO6GAUCYNXMMI3RRQLG3D5KP`](https://stellar.expert/explorer/testnet/contract/CBS6AO2L5RKKLHIC2FJOH66UIL2OHCPSSO6GAUCYNXMMI3RRQLG3D5KP) |
+| `create_stream` (1 000 USDC over 365 days, ledger 5383730) | [`aa8cb83f…5f99`](https://stellar.expert/explorer/testnet/tx/aa8cb83fa989c411bbe37e83eb97893144891018ce726b4f653e462076eb5f99) |
+| `withdraw` by the recipient six ledgers later (ledger 5383736) | [`43ce190b…14d2`](https://stellar.expert/explorer/testnet/tx/43ce190be2d0fd49f88584c774d6c139bdf497ff7ee636954f6ef452c47714d2) |
+
+Each payment above went through the smart account's real `__check_auth`: the agent's Ed25519 key signed the OpenZeppelin `AuthPayload`, and the two `SpendingLimit` policies ran on-chain and let 49 + 49 USDC through.
+
+The stream's expiry itself cannot be waited for on Testnet: the entry lives for the network's minimum persistent TTL, which is weeks. What the on-chain evidence shows is the stream being created and used; what the local suite shows is the entry being archived with most of the stream still to run. On a real network the consequence is not a failing call but a cost: every later transaction that touches the stream must carry a restore footprint and pay restoration fees, and a transaction built without one fails.
 
 ## Project layout
 

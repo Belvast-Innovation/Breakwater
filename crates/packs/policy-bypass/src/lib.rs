@@ -20,6 +20,7 @@ pub mod auth;
 mod generators;
 mod invariants;
 mod signer;
+pub mod strkey;
 
 pub use generators::{amount_near_cap, window_straddling_advance};
 pub use invariants::{AllowlistOnly, PinnedWasm, RevokedNeverAuths, RollingCap};

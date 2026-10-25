@@ -372,6 +372,7 @@ dependencies = [
  "serde_json",
  "soroban-sdk",
  "stellar-accounts",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -980,15 +981,42 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
+name = "example-ed25519-verifier"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+ "stellar-accounts",
+]
+
+[[package]]
+name = "example-owner-account"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+ "stellar-accounts",
+]
+
+[[package]]
 name = "example-policy-bypass"
 version = "0.1.0"
 dependencies = [
  "breakwater",
  "breakwater-pack-policy-bypass",
  "ed25519-dalek",
+ "example-ed25519-verifier",
+ "example-owner-account",
  "example-policy-bypass",
+ "example-spending-limit-policy",
  "serde",
  "serde_json",
+ "soroban-sdk",
+ "stellar-accounts",
+]
+
+[[package]]
+name = "example-spending-limit-policy"
+version = "0.1.0"
+dependencies = [
  "soroban-sdk",
  "stellar-accounts",
 ]

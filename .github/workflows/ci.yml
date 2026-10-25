@@ -40,4 +40,7 @@ jobs:
       - name: Build example contracts (wasm)
         run: |
           stellar contract build --package example-policy-bypass
+          stellar contract build --package example-owner-account
+          stellar contract build --package example-spending-limit-policy
+          stellar contract build --package example-ed25519-verifier
           stellar contract build --package example-ttl-archival

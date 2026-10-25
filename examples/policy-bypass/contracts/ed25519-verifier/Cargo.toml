@@ -1,0 +1,17 @@
+[package]
+name = "example-ed25519-verifier"
+description = "OpenZeppelin Ed25519 verifier as a deployable contract, for the policy-bypass demo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+stellar-accounts = { workspace = true }

@@ -38,7 +38,7 @@ use breakwater_pack_policy_bypass::{
     RollingCap, SignerKey,
 };
 use example_policy_bypass::helpers::{Ed25519Verifier, OwnerAccount, SpendingLimitPolicy};
-use example_policy_bypass::{DemoAccount, DemoAccountClient};
+use example_policy_bypass::{DemoAccount, DemoAccountClient, InitialRule};
 use serde::{Deserialize, Serialize};
 use soroban_sdk::testutils::{Address as _, EnvTestConfig, Ledger as _};
 use soroban_sdk::token::{Client as TokenClient, StellarAssetClient};
@@ -116,7 +116,7 @@ pub fn setup(daily_window: u32) -> (Env, Fixture) {
     let verifier = env.register(Ed25519Verifier, ());
     let per_call_policy = env.register(SpendingLimitPolicy, ());
     let daily_policy = env.register(SpendingLimitPolicy, ());
-    let account = env.register(DemoAccount, ());
+    let account = env.register(DemoAccount, (soroban_sdk::Vec::<InitialRule>::new(&env),));
 
     let owner_key = SignerKey::delegated_ed25519(&owner_account, OWNER_SEED);
     let agent_key = SignerKey::external_ed25519(&verifier, AGENT_SEED);
@@ -461,7 +461,11 @@ pub fn suite_with_config(config: SuiteConfig, daily_window: u32) -> Suite {
 /// Native test contracts live in the host, not the ledger: re-register them at
 /// their addresses on every restored `Env`; their storage survives the snapshot.
 pub fn restore_native_contracts(env: &Env, fx: &Fixture, owner_key_pub: &[u8; 32]) {
-    env.register_at(&addr(env, &fx.account), DemoAccount, ());
+    env.register_at(
+        &addr(env, &fx.account),
+        DemoAccount,
+        (soroban_sdk::Vec::<InitialRule>::new(env),),
+    );
     env.register_at(
         &addr(env, &fx.owner_account),
         OwnerAccount,
