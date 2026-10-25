@@ -237,6 +237,7 @@ mod logic {
 
     /// The fixed contract's version: only the sender may extend, and never
     /// beyond the stream's remaining duration.
+    #[cfg(any(test, feature = "fixed"))]
     pub fn bump_ttl_checked(env: &Env, id: u64, ledgers: u32) {
         let stream = load(env, id);
         stream.sender.require_auth();
