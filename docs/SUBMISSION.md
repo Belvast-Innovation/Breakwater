@@ -19,7 +19,7 @@ From the portal "Rules & conduct" page:
 | README | Summary, problem, setup, installation, demo instructions, how Stellar is used, prior work, AI usage | [ ] |
 | Demo video | **2–4 minutes**, YouTube or Vimeo link | [ ] |
 | Pitch deck | PDF / PPTX / PPT / HTML, **≤ 20 MiB** | [ ] |
-| Testnet evidence | Contract IDs + at least one tx hash in README | [x] seven contract ids, four confirmed transactions; the third replayed payment is added when its ledger is reached |
+| Testnet evidence | Contract IDs + at least one tx hash in README | [x] seven contract ids, six confirmed transactions (deploys excluded): three replayed bypass payments, `create_stream`, `withdraw` |
 | Track selection | Builder: **Genesis**. Thematic: **Stellar Unlocked** (FAQ says both may be selected; check the form) | [ ] |
 | Submission form answers | Problem, target user, value proposition, what was built during the event | [ ] |
 
@@ -66,7 +66,7 @@ Record with a fixed seed. Keep a backup recording from the first successful run 
 | Time | Action |
 | --- | --- |
 | 09:00 | Attend morning briefing (submission format, late policy) |
-| 09:15–10:30 | Confirm the third Testnet payment hash is in the README table; final README read-through against `breakwater run` output |
+| 09:15–10:30 | Final README read-through against `breakwater run` output |
 | 10:30–11:00 | Record video (two takes), upload to YouTube, confirm link is public |
 | 11:00–11:20 | Export deck to PDF, check size < 20 MiB |
 | 11:20–11:40 | Final `main` merge: README, docs, CI green. `git log` sanity check |

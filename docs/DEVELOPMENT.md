@@ -210,6 +210,10 @@ Deployed on Testnet on 25 October 2026 (protocol 29 accepted the SDK 28 wasm; th
 | `USDC` Stellar Asset Contract | `CDDSS44LN2N4TNVTDH42PLEVHKDB5OZQRBHAD2KQRH6LIADRIBUMPDMM` |
 | `PaymentStream` | `CBS6AO2L5RKKLHIC2FJOH66UIL2OHCPSSO6GAUCYNXMMI3RRQLG3D5KP` |
 
+Replayed payments (49 USDC each, agent-signed, `SUCCESS`): ledger 5383703 `b5ea44983473462379a6909abc335105a040f6d4fee83908cf97dee49cec6772`, ledger 5383715 `82be1eb8d373bf91aecc9ca4743041ea1f50d1961f7b5fb7ba7a3f9add1e5608`, ledger 5387240 `3f30f306985585ff62b31271f7aa050a26ec82f6458925d17aa5c32ce157aa8e`. The merchant's balance went from 0 to 147 USDC.
+
+The state file and the report are local (`breakwater-out/` is gitignored). If they are lost, regenerate the report with `breakwater run examples/policy-bypass --seed 7 --json "$PWD/breakwater-out/policy-bypass.json"` (pass an absolute path: the CLI runs cargo inside the suite directory, so a relative `--json` path lands there) and rebuild the state file from the ids above with `jq -n`; the keys `account`, `token`, `verifier`, `policy_per_call`, `policy_daily`, `owner_account`, `agent_rule` and `last_step_ledger` are what `--resume-from` reads.
+
 The payment-stream demo needs no custom authorization: `stellar contract deploy ... -- --token <sac>`, then `invoke -- create_stream --sender <G> --recipient <G> --amount 10000000000 --duration_ledgers 6307200` as the sender and `invoke --source <recipient> -- withdraw --id 0` as the recipient. Testnet closes a ledger about every 5 s (measured 31 ledgers in 155 s), so one policy window of 1 728 ledgers is about 2 h 25 min.
 
 ## 9. Troubleshooting
