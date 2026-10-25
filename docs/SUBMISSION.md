@@ -50,7 +50,11 @@ Judging is asynchronous (video, deck, repo, form). Finalists pitch live at Merid
 
 Record with a fixed seed. Keep a backup recording from the first successful run in case the live one misbehaves.
 
-## Pitch deck outline (8 slides)
+## Pitch deck
+
+The submitted deck is `docs/deck/breakwater-pitch.pdf` (and the editable `docs/deck/breakwater-pitch.pptx`); its slide-by-slide content, sources for every number and screenshot provenance are in [`docs/PITCH_DECK.md`](PITCH_DECK.md). The outline below was the plan written before the event.
+
+### Original outline (8 slides)
 
 1. Title — Breakwater: invariant testing for Soroban
 2. Problem — the missing layer, with the three existing tools named
