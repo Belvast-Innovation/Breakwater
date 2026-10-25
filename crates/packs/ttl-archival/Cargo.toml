@@ -1,0 +1,13 @@
+[package]
+name = "breakwater-pack-ttl-archival"
+description = "Breakwater attack pack: invariants and ledger-advance strategies for Soroban TTL state archival"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+breakwater = { workspace = true }
+soroban-sdk = { workspace = true, features = ["testutils"] }

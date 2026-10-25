@@ -75,7 +75,7 @@ stellar contract build --package example-ttl-archival
 | `proptest`, `proptest-state-machine` | Random sequence generation and automatic shrinking | https://docs.rs/proptest-state-machine |
 | OpenZeppelin `stellar-contracts` | Smart-account, policy and signer contracts used as the demo target | https://docs.openzeppelin.com/stellar-contracts |
 | `clap`, `serde`, `serde_json`, `anyhow`, `thiserror` | CLI, report serialisation, error handling | docs.rs |
-| `soroban-fork` (optional, feature `fork`) | Lazy-loading mainnet/testnet fork for fuzzing live state | https://docs.rs/soroban-fork |
+| `soroban-fork` (not yet a dependency) | Lazy-loading mainnet/testnet fork for fuzzing live state. Currently supports `soroban-sdk` 25.x only; it will be added once it supports SDK 28 | https://docs.rs/soroban-fork |
 
 Versions are pinned in `Cargo.toml`; `Cargo.lock` is committed.
 
@@ -159,6 +159,7 @@ git log -1 --format='%an <%ae>%n%B'   # author is you; no AI attribution trailer
 | Symptom | Fix |
 | --- | --- |
 | `error: target wasm32v1-none not found` | `rustup target add wasm32v1-none`; needs Rust ≥ 1.85 |
+| `error: soroban-sdk requires stellar-cli v25.2.0+ to build a contract` | Use `stellar contract build --package <crate>` instead of `cargo build --target wasm32v1-none`; SDK 28 needs the CLI's spec shaking |
 | `testutils` items missing | enable the feature: `soroban-sdk = { version = "...", features = ["testutils"] }` in `[dev-dependencies]` |
 | OpenZeppelin crate version mismatch with `soroban-sdk` | both must target the same SDK major; check `Cargo.lock` and pin, do not bump mid-event |
 | Testnet account not found | `stellar keys generate ... --fund` again, or use Friendbot: `https://friendbot.stellar.org/?addr=<G...>` |

@@ -1,0 +1,22 @@
+[package]
+name = "example-policy-bypass"
+description = "Deliberately misconfigured smart account used as the policy-bypass demo target"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+stellar-accounts = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+breakwater = { workspace = true }
+breakwater-pack-policy-bypass = { workspace = true }
