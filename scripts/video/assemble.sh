@@ -5,7 +5,7 @@
 #   scripts/video/assemble.sh --preview   # silent preview, durations estimated from the text
 #
 # Inputs:  breakwater-out/video/segments/segNN.mp4   (scripts/video/make-segments.sh)
-#          breakwater-out/video/voice/segNN.m4a      (one recording per segment)
+#          breakwater-out/video/voice/segNN.m4a or .mp3 (one recording per segment)
 #          docs/VIDEO.md                             (narration, one "Narration:" paragraph per segment)
 # Output:  breakwater-out/video/breakwater-demo.mp4  (or breakwater-demo-preview.mp4)
 #
@@ -71,7 +71,8 @@ while IFS=$'\t' read -r id narration; do
     audio_in=(-f lavfi -t "$target" -i "anullsrc=channel_layout=stereo:sample_rate=48000")
   else
     voice="$VOICE/seg$id.m4a"
-    [ -f "$voice" ] || { echo "error: missing $voice (record it, or run with --preview)" >&2; exit 2; }
+    [ -f "$voice" ] || voice="$VOICE/seg$id.mp3"
+    [ -f "$voice" ] || { echo "error: missing $VOICE/seg$id.m4a or .mp3 (record it, or run with --preview)" >&2; exit 2; }
     target=$(python3 -c "print(round($(dur "$voice") + $TAIL, 3))")
     audio_in=(-i "$voice")
   fi

@@ -3,7 +3,7 @@
 Writes 1920x1080 PNGs (and one tall PNG for a vertical pan) to
 breakwater-out/video/stills/:
 
-  deck-1.png, deck-5.png, deck-7.png   pages of docs/deck/breakwater-pitch.pdf
+  deck-1/3/5/7.png                     pages of docs/deck/breakwater-pitch.pdf
   code-suite.png                       the README "Writing a test" suite (tall, panned)
   code-repro.png                       first lines of the exported reproduction
 
@@ -30,7 +30,7 @@ os.makedirs(OUT, exist_ok=True)
 
 def deck_pages():
     pdf = pymupdf.open(os.path.join(ROOT, "docs/deck/breakwater-pitch.pdf"))
-    for page_no in (1, 5, 7):
+    for page_no in (1, 3, 5, 7):
         page = pdf[page_no - 1]
         zoom = W / page.rect.width
         pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
@@ -88,21 +88,34 @@ def repro_head(lines=25):
 
 
 def stats_card():
-    """Caption card for segment 09, with counts read from docs/PITCH_DECK.md's facts table."""
+    """Caption card for segment 09.
+
+    The counts come from BREAKWATER_COUNTS ("<commits> <pull requests> <tests> <as-of time>",
+    set by make-segments.sh just before the GitHub page is recorded) or, without it, from
+    docs/PITCH_DECK.md's facts table.
+    """
     from PIL import ImageDraw, ImageFont
 
-    text = open(os.path.join(ROOT, "docs/PITCH_DECK.md"), encoding="utf-8").read()
+    if os.environ.get("BREAKWATER_COUNTS"):
+        commits, prs, tests, as_of = os.environ["BREAKWATER_COUNTS"].split(" ", 3)
+    else:
+        text = open(os.path.join(ROOT, "docs/PITCH_DECK.md"), encoding="utf-8").read()
 
-    def count(pattern):
-        m = re.search(pattern, text)
-        if not m:
-            sys.exit(f"docs/PITCH_DECK.md has no row matching {pattern!r}")
-        return m.group(1)
+        def count(pattern):
+            m = re.search(pattern, text)
+            if not m:
+                sys.exit(f"docs/PITCH_DECK.md has no row matching {pattern!r}")
+            return m.group(1)
+
+        commits = count(r'[|] (\d+) commits on `main`')
+        prs = count(r'[|] (\d+) merged pull requests')
+        tests = count(r'[|] (\d+) tests passing')
+        as_of = None
 
     lines = [
-        f"{count(r'[|] (\d+) commits on `main`')} commits on main",
-        f"{count(r'[|] (\d+) merged pull requests')} merged pull requests",
-        f"{count(r'[|] (\d+) tests passing')} tests passing",
+        f"{commits} commits on main",
+        f"{prs} merged pull requests",
+        f"{tests} tests passing",
         "CI on every pull request",
     ]
     font = None
@@ -117,11 +130,15 @@ def stats_card():
         if font:
             break
     font = font or ImageFont.load_default()
-    card = Image.new("RGBA", (760, 92 * len(lines) + 70), (15, 15, 15, 230))
+    card = Image.new("RGBA", (760, 92 * len(lines) + (130 if as_of else 70)), (15, 15, 15, 230))
     draw = ImageDraw.Draw(card)
     for i, line in enumerate(lines):
         draw.rectangle([40, 52 + 92 * i, 52, 86 + 92 * i], fill=(253, 218, 36, 255))
         draw.text((76, 40 + 92 * i), line, font=font, fill=(255, 255, 255, 255))
+    if as_of:
+        small = font.font_variant(size=30) if hasattr(font, "font_variant") else font
+        draw.text((76, 40 + 92 * len(lines) + 4), f"as of {as_of}", font=small, fill=(190, 190, 190, 255))
+        lines.append(f"as of {as_of}")
     card.save(os.path.join(OUT, "stats-card.png"))
     return lines
 
@@ -153,4 +170,4 @@ if __name__ == "__main__":
     deck_pages()
     print("code-suite.png", frame(code_image(readme_suite(), 30), "code-suite.png", tall=True))
     print("code-repro.png", frame(code_image(repro_head(), 30), "code-repro.png"))
-    print("deck-1/5/7.png written")
+    print("deck-1/3/5/7.png written")
