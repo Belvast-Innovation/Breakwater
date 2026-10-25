@@ -15,6 +15,9 @@ mod handler;
 mod invariant;
 mod ledger;
 mod log;
+mod runner;
+mod step;
+mod suite;
 
 pub use actor::Actor;
 pub use config::{AuthMode, SuiteConfig};
@@ -23,6 +26,8 @@ pub use handler::{CallOutcome, Handler, HandlerError, StepArgs};
 pub use invariant::{Invariant, Violation, ViolationKind};
 pub use ledger::LedgerAdvance;
 pub use log::{Gap, StepOutcome, StepRecord, TxLog};
+pub use step::Step;
+pub use suite::{Failure, Outcome, RunReport, Suite};
 
 /// Re-export so suites can name proptest strategies without a direct dependency.
 pub use proptest;
