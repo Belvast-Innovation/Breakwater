@@ -46,7 +46,7 @@ The production storyboard, narration and assembly scripts are `docs/VIDEO.md` an
 1. 0:00–0:20 — Problem: Soroban has static analysis, AI review, formal verification; no stateful fuzzing. Agent wallets and TTL make it urgent.
 2. 0:20–0:50 — Show the suite declaration: actors, one handler, one invariant. Fifteen lines.
 3. 0:50–1:40 — `cargo run -p breakwater-cli -- run examples/policy-bypass --seed 7`. Watch it find 49 → 49 → 49 (the third payment one 1 728-ledger window after the first), shrink it to three steps, then `export` it; open `examples/policy-bypass/tests/repro_policy_bypass_7.rs`.
-4. 1:40–2:20 — `cargo run -p breakwater-cli -- run examples/ttl-archival --seed 11`. The daily-then-silence profile fast-forwards a quarter; `no_mid_lifecycle_expiry` reports stream 0 archived with 275 days left to run. Say what that means on-chain: not a failing call, but a restore footprint and restoration fees on every later transaction.
+4. 1:40–2:20 — `cargo run -p breakwater-cli -- run examples/ttl-archival --seed 11`. The daily-then-silence profile fast-forwards a quarter; `no_mid_lifecycle_expiry` reports stream 0 archived with 275 days left to run. Say what that means on-chain: not a failing call, but the next transaction that touches the entry must restore it and pay for that, one built without the restore fails, and the entry is archived again after every quiet period.
 5. 2:20–2:45 — The same three payments replayed on Testnet through the real `__check_auth` (`scripts/replay-testnet.sh`); show the transactions on stellar.expert from the README table.
 6. 2:45–3:00 — Why it is infrastructure; roadmap; SCF.
 
