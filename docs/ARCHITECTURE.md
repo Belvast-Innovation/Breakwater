@@ -37,17 +37,24 @@ A named signer with a Soroban address. Because an `Address` is bound to the `Env
 
 ```rust
 pub trait Handler: Send + Sync + 'static {
-    type Args: Clone + Debug + Serialize + Send + Sync + 'static;
+    type Args: Clone + Debug + Serialize + DeserializeOwned + Send + Sync + 'static;
     fn name(&self) -> &'static str;
     fn actors(&self) -> &[Actor];
     fn strategy(&self) -> BoxedStrategy<Self::Args>;        // proptest
-    fn call(&self, env: &Env, actor: &Actor, args: &Self::Args) -> Result<CallOutcome, HandlerError>;
+    fn call(&self, env: &Env, ctx: &CallContext, actor: &Actor, args: &Self::Args)
+        -> Result<CallOutcome, HandlerError>;
+    fn args_from_json(&self, value: &serde_json::Value) -> Option<Self::Args> { /* serde default */ }
 }
 
-pub enum CallOutcome { Success, ContractError(u32) }      // both are expected behaviour
+pub enum CallOutcome {
+    Success,                        // expected
+    SuccessWith(serde_json::Value), // expected, with the call's return value (`CallOutcome::returning(v)`)
+    ContractError(u32),             // expected: a graceful `contracterror`
+    Unauthorized,                   // expected: the host rejected the authorization
+}
 ```
 
-A handler wraps one contract function. `call` is expected to succeed or fail *gracefully* (a `contracterror`, reported as `CallOutcome::ContractError`). A `HandlerError` or a bare panic is treated as a bug and ends the sequence with a `Violation` of kind `handler_error` or `panic`, matching the convention in `soroban-token-fuzzer`. `Args` must be `Serialize` so that steps can be logged and exported; the suite type-erases them internally.
+A handler wraps one contract function. `call` is expected to succeed or fail *gracefully* (a `contracterror`, reported as `CallOutcome::ContractError`, or an authorization rejection, reported as `CallOutcome::Unauthorized`). A `HandlerError` or a bare panic is treated as a bug and ends the sequence with a `Violation` of kind `handler_error` or `panic`, matching the convention in `soroban-token-fuzzer`. `CallContext` carries the step index, the auth mode, a per-step nonce and a signature expiration ledger for handlers that build real authorization entries. `Args` must be `Serialize` and `DeserializeOwned` so that steps can be logged, exported and replayed; the suite type-erases them internally. Each executed step becomes a `StepRecord` in the `TxLog`: handler, actor, arguments as JSON, ledger gap, ledger sequence and timestamp, outcome, and `return_value` (the JSON the handler attached with `SuccessWith`), all of which reach the exported report.
 
 ### `Invariant`
 
