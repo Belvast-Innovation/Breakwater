@@ -30,7 +30,7 @@ Every number below has a source: a command whose output contains it, or a file i
 | 11 commits on `main`, first at 2026-10-25 11:21 UTC | `git rev-list --count main`, `git log --reverse main` |
 | 10 merged pull requests | `gh pr list --state merged` |
 | 40 tests passing | `cargo test --workspace` |
-| Protocol 23 archival incident: 478 entries affected | `docs/ARCHITECTURE.md` §5 (stellar.org source linked there) |
+| Protocol 23 archived 478 contract entries with stale values; 84 were restored into live state before Protocol 24 fixed it | [stellar.org, Addressing state archival inconsistencies](https://www.stellar.org/blog/developers/addressing-state-archival-inconsistencies-protocol-upgrade-vote-next-week); also `docs/ARCHITECTURE.md` §5 |
 | x402 / MPP agent payments | README "Problem" |
 
 ## Screenshots
@@ -43,8 +43,8 @@ All in `docs/deck/shots/`, rendered headless (no desktop captures), no user name
 | S2 | `S2-term-ttl-archival.png` | same for `examples/ttl-archival --seed 11` | whole window |
 | S3 | `S3-report-policy-bypass.png` | `docs/reports/policy-bypass-seed-7.html`, headless Chrome 1600×900 | x 384–1216, y 16–630: summary card, timeline, step table |
 | S4 | `S4-report-ttl-archival.png` | `docs/reports/ttl-archival-seed-11.html`, headless Chrome 1600×900 | summary card (y 16–160) stacked on the violation chart (y 610–860) |
-| S5 | `S5-stellar-expert-tx3.png` | stellar.expert page of tx `3f30f306…aa8e`, headless Chrome 1600×900 | x 100–1500, y 80–590; the deck uses its top 370 px (summary and the transfer call) |
-| S6 | `S6-github-merged-prs.png` | `github.com/Belvast-Innovation/Breakwater/pulls?q=is:pr is:merged`, headless Chrome 1600×900, author names masked | x 176–1424, y 190–900; the deck uses y 100–365 of the file (the three most recent merged PRs) |
+| S5 | `S5-stellar-expert-tx3.png` | stellar.expert page of tx `3f30f306…aa8e`, headless Chrome 1600×900 at device scale 2 | the Summary block's left column (status, ledger, source, sequence, size) stacked above the transfer row, which is split before `transfer(` so the card fits the slide's full height; nothing else from the page |
+| S6 | `S6-github-merged-prs.png` | `github.com/Belvast-Innovation/Breakwater/pulls?q=is:pr is:merged`, headless Chrome 1600×900, author names masked | x 176–1424, y 190–900; kept in `shots/` but not used in the deck (the PR count is in a bullet) |
 | S7 | `S7-repro-test.png` | first 25 lines of `examples/policy-bypass/tests/repro_policy_bypass_7.rs`, `pygmentize -l rust -O style=monokai,linenos=table`, headless Chrome | x 0–1060, y 20–710 |
 | S8 | `S8-repo-qr.png` | `qrencode -s 12 -m 2 https://github.com/Belvast-Innovation/Breakwater` | none |
 
@@ -73,7 +73,7 @@ All in `docs/deck/shots/`, rendered headless (no desktop captures), no user name
 - Subtitle: Soroban has static analysis, AI review and formal verification, but no reusable stateful fuzzing.
 - Bullets:
   - Agent wallets paying over x402 / MPP rely on smart-account policies; a policy that holds for one call may fail for five.
-  - State archival: after mainnet moved to Protocol 23, archived entries were restored with stale values (478 entries affected).
+  - Protocol 23 archived 478 contract entries with stale values; 84 were restored into live state before Protocol 24 fixed it.
   - For every Soroban team shipping custom accounts or long-lived storage; a suite runs as `cargo test`.
 - Think: The bugs that cost money here only appear across many transactions and long gaps.
 - Picture: S4
@@ -94,9 +94,10 @@ All in `docs/deck/shots/`, rendered headless (no desktop captures), no user name
 - Header: `PLATFORM 05 / 07`, `NEXT ▸ TESTNET & PROGRESS`, `PITCH STEP 04 / 06`
 - Subtitle: The policy code is correct; the configuration is not. Every payment passes alone; the sequence does not.
 - Bullets:
-  - Daily cap set to 1 728 ledgers, not 17 280: 49 → 49 → 49 USDC (+1 / +10 / +1718 ledgers) is 147 in 24 h against a 100 cap; up to 10× per day.
-  - Stream that never extends TTL: "stream 0 is archived with 275 days left to run".
-  - Unauthenticated `bump_ttl` keeps an entry alive 1.3 days past its stream; one call restores 5 entries against a budget of 3.
+  - Daily window 1 728 ledgers, not 17 280: 49 → 49 → 49 USDC (+1 / +10 / +1718) is 147 in 24 h vs a 100 cap; up to 10× a day.
+  - No `extend_ttl`: "stream 0 is archived with 275 days left to run".
+  - Unauthenticated `bump_ttl` keeps a stream alive 1.3 days past its end.
+  - After 90 quiet days one `withdraw_many` restores 5 entries against a budget of 3.
 - Think: Breakwater found the three-step sequence that no single-call test can see.
 - Picture: S3
 
@@ -109,7 +110,7 @@ All in `docs/deck/shots/`, rendered headless (no desktop captures), no user name
   - Seven contracts and five transactions on Testnet, each linked from the README.
   - Built during the event: 11 commits on `main`, 10 merged PRs, 40 tests, CI on every PR.
 - Think: Every number in this deck comes from a command anyone can rerun.
-- Picture: S5 above S6
+- Picture: S5 at the full height of the picture area
 
 ### 7. The Team
 
@@ -118,10 +119,10 @@ All in `docs/deck/shots/`, rendered headless (no desktop captures), no user name
 - Bullets:
   - Solo builder: framework design, Rust implementation, attack packs, Testnet replay.
   - Repository: github.com/Belvast-Innovation/Breakwater (Apache-2.0).
-  - Next: rule-rotation probe, malicious keep-alive, restoration-cost CI gate.
+  - Next: rule-rotation probe, restoration-cost CI gate, XDR replay export; then crates.io and a GitHub Action.
 - Think: Everything shown was built during the event; the commit history is the record.
 - Picture: S8 with the repository URL
 
 ## Layout changes to the template
 
-To fit a screenshot in the right 45% of each content slide without covering text, the subtitle, bullet and Think boxes are narrowed to the left 8.6 inches, the subtitle is set at 24 pt and bullets at 20 pt (template: 28 pt and 24 pt), and the decorative shapes on the right of the content slides are removed. Fonts, colours, the header bar, the footer and the theme are unchanged.
+To fit a screenshot in the right 45% of each content slide without covering text, the subtitle, bullet and Think boxes are narrowed to the left 8.6 inches, the subtitle is set at 24 pt and bullets at 20 pt (template: 28 pt and 24 pt), and the decorative shapes on the right of the content slides are removed. On Findings, which has four bullets, the bullet box is taller and the Think box sits lower. Fonts, colours, the header bar, the footer and the theme are unchanged.
