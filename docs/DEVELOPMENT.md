@@ -126,11 +126,13 @@ cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 
-# run a suite with a fixed seed
-cargo run -p breakwater-cli -- run examples/policy-bypass --seed 42 --steps 30
+# run a suite with a fixed seed (drives `cargo test --test suite breakwater_suite` in that crate)
+cargo run -p breakwater-cli -- run examples/policy-bypass --seed 7 --steps 1..=10 --auth real
 
-# export the last failure as a unit test
-cargo run -p breakwater-cli -- export examples/policy-bypass --out tests/repro.rs
+# export the shrunk failure as a regression test, or render a saved report
+cargo run -p breakwater-cli -- export examples/policy-bypass --seed 7 --out examples/policy-bypass/tests/repro_policy_bypass_7.rs
+cargo run -p breakwater-cli -- run examples/ttl-archival --seed 11 --json run.json
+cargo run -p breakwater-cli -- report run.json --html docs/reports/ttl-archival-seed-11.html
 
 # deploy a demo contract to Testnet
 stellar contract deploy \
