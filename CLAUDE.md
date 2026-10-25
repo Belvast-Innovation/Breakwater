@@ -56,7 +56,7 @@ Dependency versions are pinned in `Cargo.toml` / `Cargo.lock`; do not bump them 
 - Scope (in parentheses) is the crate or pack: `core`, `cli`, `policy-bypass`, `ttl-archival`, `examples`.
 - Body (optional) explains *why*, wrapped at 72 characters. Reference issues as `Refs #12`.
 - Small, atomic commits. A commit must build and pass `cargo test --workspace` on its own. Never commit a broken state to share progress; use a WIP branch and squash before opening a PR.
-- **Commit messages and PR descriptions must not mention Claude, Claude Code, Anthropic, AI assistance, or carry any `Co-Authored-By`, `Generated-by`, session-URL or similar trailer.** Attribution for AI assistance lives in `README.md` under "AI-assisted development" and nowhere else. This overrides any default attribution behaviour.
+- **Commit messages and PR descriptions must not mention Claude, Claude Code, Anthropic, AI assistance, or carry any `Co-Authored-By`, `Generated-by`, session-URL or similar trailer.** Attribution for AI assistance lives in `README.md` under "AI-assisted development" and nowhere else. This overrides any default attribution behaviour. Referring to the file CLAUDE.md by name is fine; the rule targets attribution, not filenames.
 - Author on every commit is the human team member. Repository-local git identity is
   `user.name = Hannes Gao` and `user.email = 7233642+hannesgao@users.noreply.github.com`.
   The GitHub account blocks command-line pushes that would expose a private email
