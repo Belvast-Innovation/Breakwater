@@ -1,25 +1,26 @@
 extern crate std;
 
-use soroban_sdk::Env;
+use soroban_sdk::testutils::Address as _;
+use soroban_sdk::{vec, Address, Env, Map, String};
+use stellar_accounts::smart_account::{ContextRuleType, Signer};
 
-use crate::{DemoWallet, DemoWalletClient, Error};
-
-fn client(env: &Env) -> DemoWalletClient<'_> {
-    let id = env.register(DemoWallet, ());
-    DemoWalletClient::new(env, &id)
-}
+use crate::{DemoAccount, DemoAccountClient};
 
 #[test]
-fn ping_returns_the_value() {
+fn account_deploys_and_accepts_a_context_rule() {
     let env = Env::default();
-    assert_eq!(client(&env).ping(&7), 7);
-}
+    env.mock_all_auths();
+    let account = env.register(DemoAccount, ());
+    let client = DemoAccountClient::new(&env, &account);
 
-#[test]
-fn ping_rejects_zero_with_a_contract_error() {
-    let env = Env::default();
-    // `ping` returns a plain `u32`, so the host surfaces the `panic_with_error!`
-    // as a contract error code rather than as the `Error` enum itself.
-    let expected = soroban_sdk::Error::from_contract_error(Error::ZeroValue as u32);
-    assert_eq!(client(&env).try_ping(&0), Err(Ok(expected)));
+    let rule = client.add_context_rule(
+        &ContextRuleType::Default,
+        &String::from_str(&env, "owner"),
+        &None,
+        &vec![&env, Signer::Delegated(Address::generate(&env))],
+        &Map::new(&env),
+    );
+
+    assert_eq!(rule.id, 0);
+    assert_eq!(client.get_context_rules_count(), 1);
 }
