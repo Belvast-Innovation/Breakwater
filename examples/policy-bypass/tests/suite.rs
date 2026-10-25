@@ -586,16 +586,21 @@ fn finds_the_window_bypass_under_real_auth_and_shrinks_it() {
             .all(|s| s.handler == "transfer" && s.outcome.is_success()),
         "the shrunk reproduction is payments only"
     );
-    // Minimal shape for this seed: three payments of cap - 1, the last one
-    // waiting exactly one ledger short of the mis-sized window so that the
-    // first payment has just dropped out of the policy's history.
+    // Minimal shape: three payments of cap - 1, the third landing exactly one
+    // mis-sized window after the first, so that the first payment has just
+    // dropped out of the policy's history. How the shrinker splits the wait
+    // between the second and third step is not significant.
     let steps = failure.log.steps();
     assert_eq!(steps.len(), 3, "shrunk to three steps");
     assert!(steps
         .iter()
         .all(|s| s.args["amount_usdc"] == PER_CALL_CAP_USDC - 1));
     assert_eq!(spent, 3 * (PER_CALL_CAP_USDC - 1));
-    assert_eq!(steps[2].gap.ledgers, BUGGY_DAILY_WINDOW - 1);
+    assert_eq!(
+        steps[1].gap.ledgers + steps[2].gap.ledgers,
+        BUGGY_DAILY_WINDOW,
+        "third payment lands exactly one window after the first"
+    );
     assert_eq!(failure.failing_step, 2);
 }
 

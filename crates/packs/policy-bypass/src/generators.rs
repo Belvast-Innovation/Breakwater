@@ -19,12 +19,11 @@ pub fn amount_near_cap(cap: i64) -> BoxedStrategy<i64> {
 
 /// Ledger gaps that frequently cross a policy window of `period_ledgers`:
 /// uniform over one and a half periods, so roughly a third of the gaps land
-/// past the window boundary. Seconds track Stellar's ~5 s close time.
+/// past the window boundary. Timestamps follow at five seconds per ledger.
 pub fn window_straddling_advance(period_ledgers: u32) -> LedgerAdvance {
     let max_ledgers = (period_ledgers / 2).saturating_mul(3).max(2);
     LedgerAdvance::Random {
         ledgers: 1..=max_ledgers,
-        seconds: 5..=(u64::from(max_ledgers) * 5),
     }
 }
 
