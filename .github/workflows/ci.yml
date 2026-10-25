@@ -33,5 +33,11 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      # soroban-sdk 28 refuses a bare `cargo build --target wasm32v1-none`: its build
+      # script requires the spec-shaking support that only `stellar contract build` provides.
+      - uses: stellar/stellar-cli@v28.1.0
+
       - name: Build example contracts (wasm)
-        run: cargo build --release --target wasm32v1-none -p example-policy-bypass -p example-ttl-archival
+        run: |
+          stellar contract build --package example-policy-bypass
+          stellar contract build --package example-ttl-archival
