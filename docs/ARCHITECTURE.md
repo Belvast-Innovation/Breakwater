@@ -151,7 +151,7 @@ Target: `examples/ttl-archival`, a payment stream (`create_stream`, `withdraw`, 
 Two facts about `soroban-sdk` 28 shape the pack:
 
 - **Archived persistent and instance entries are restored on access.** Since Protocol 23 a transaction whose restore list names an archived entry restores it before running (simulation fills that list); the test `Env` emulates this, so a contract read of an archived entry succeeds and resets the entry's TTL to the network minimum. Only temporary entries vanish. The `testutils` `get_ttl` getters go through the same path and therefore cannot observe an archived entry.
-- **`live_until` can be read without touching the entry.** `env.host().get_stored_entries()` lists every ledger entry with its `live_until`; `breakwater_pack_ttl_archival::ttl` filters it by contract, key and durability. That is the only side-effect-free probe, and it is what the invariants use.
+- **`live_until` can be read without touching the entry.** `env.host().get_stored_entries()` lists every ledger entry with its `live_until`; `breakwater_pack_ttl_archival::ttl` filters it by contract, key and durability. That is the only side-effect-free probe, and it is what the invariants use. `Env::host()` is a `testutils`-only accessor to the host implementation rather than a documented contract API; the dependency is isolated in `ttl.rs` and covered by a test so an SDK change surfaces immediately.
 
 Invariants read the set of running streams from the `TxLog` (`StreamModel`: creations, cancellations, durations; ids follow creation order), never from the contract, so checking never restores anything:
 
@@ -166,12 +166,18 @@ The usage profile is what makes the pack bite. The demo `Env` sets the minimum p
 ## 6. CLI
 
 ```
-breakwater run <suite-dir> [--seed N] [--steps A..=B] [--auth mock|real] [--json]
-breakwater export <suite-dir> --out <file.rs> [--seed N]
-breakwater report <json>            # human-readable summary of a run
+breakwater run    <suite-dir> [--seed N] [--steps A..=B] [--auth mock|real] [--json <file>] [--no-color]
+breakwater export <suite-dir> --out <file.rs> [--seed N] [--from <run.json>]
+breakwater report <run.json> [--html <file>]
 ```
 
-Exit codes: `0` all invariants held, `1` violation found (reproduction exported), `2` usage/config error. The `--json` output is stable so it can be consumed in CI.
+`run` executes `cargo test --manifest-path <suite-dir>/Cargo.toml --test suite breakwater_suite -- --exact` with `BREAKWATER_SEED`, `BREAKWATER_STEPS`, `BREAKWATER_AUTH` and `BREAKWATER_REPORT` in the environment. The suite applies the first three through `SuiteConfig::from_env`, writes its `RunReport` to the fourth through `Exporter::write_if_requested`, and returns without asserting when it is driven that way; the CLI judges the JSON. Cargo's own output goes to stderr unchanged; the CLI prints the header, the shrunk sequence one step per line (index, handler, actor, ledger gap, arguments as `k=v`, outcome), the violation and the seed to reproduce with.
+
+`export` turns the shrunk sequence into a regression test: a file that embeds the steps as JSON and calls `common::replay_json`, the entry point each example's `tests/common/mod.rs` exposes. That function rebuilds the fixture and calls `Suite::replay`, which executes exactly the recorded steps (handler and actor by name, arguments rebuilt by `Handler::args_from_json`, gaps as recorded) and checks every invariant after each. The generated test asserts the same invariant fails at the same step with the same message. `examples/*/tests/repro_*.rs` are such files, committed as regression tests.
+
+`report` renders a JSON report in the terminal, and with `--html` writes a single static page (inline CSS and SVG, no scripts, no external resources): header, step timeline over ledger sequence with the violating step highlighted, per-step table, and a cumulative-spend chart with the limit line for `rolling_cap` or a TTL-over-ledgers chart with the zero line for `no_mid_lifecycle_expiry`. `docs/reports/` holds one page per demo.
+
+Exit codes: `0` all invariants held, `1` violation found, `2` usage or configuration error (bad arguments, no `tests/suite.rs`, cargo failed without writing a report). The JSON report is the `RunReport` structure and is stable for CI consumption.
 
 ## 7. Stellar features exercised
 
@@ -187,7 +193,7 @@ Exit codes: `0` all invariants held, `1` violation found (reproduction exported)
 
 **Decided**
 
-- How the CLI drives a suite: `breakwater run <suite-dir>` executes `cargo test --test suite` in the target directory, passes the seed and step range through environment variables, and parses the JSON the suite prints. No separate `suite` binary per example. Implementation lands in the `feat(cli)` PR.
+- How the CLI drives a suite: `breakwater run <suite-dir>` executes `cargo test --test suite breakwater_suite` in the target directory, passes seed, step range and auth mode through environment variables, and reads the JSON report the suite writes. No separate `suite` binary per example. See §6.
 - `soroban-fork` is not a dependency for the hackathon build: it currently supports `soroban-sdk` 25.x only and the workspace is pinned to 28.0.0. Mainnet-state fuzzing stays a roadmap item.
 - `Real` auth runs end to end at about 5 ms per step on the demo suite, so generation uses `Real` directly (see §4).
 
@@ -196,4 +202,4 @@ Exit codes: `0` all invariants held, `1` violation found (reproduction exported)
 - Whether `proptest-state-machine` preconditions are expressive enough for the policy generators, or whether a custom `Strategy` is needed.
 - Generating smart-account rule rotation (`remove_context_rule` + `add_context_rule`) under `Real` auth: policy `install` callbacks need pre-built sub-invocations. Interesting because re-creating a rule reinstalls `SpendingLimit` with an empty history, which is a second way to reset the window.
 - Stream ids in the `ttl-archival` pack are inferred from creation order because the log carries no return values. Recording handler return values in `StepRecord` would make the model exact.
-- Whether to export reproductions as `#[test]` functions or as a JSON step list plus a generic replay test. Decided in two stages: the core `Exporter` emits the JSON step list (`suite`, `seed`, `outcome.status`, `outcome.violation`, `outcome.failing_step`, `outcome.log.steps[]`); the CLI's `export` command renders a Rust `#[test]` from it.
+- Whether to export reproductions as `#[test]` functions or as a JSON step list plus a generic replay test. Both: the core `Exporter` emits the JSON report, and `breakwater export` wraps the shrunk steps in a `#[test]` that replays them through `Suite::replay` (see §6).

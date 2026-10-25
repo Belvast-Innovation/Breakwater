@@ -74,73 +74,128 @@ Prerequisites are listed in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). In sho
 
 ```bash
 git clone https://github.com/Belvast-Innovation/Breakwater
-cd breakwater
+cd Breakwater
 cargo build --workspace
 
-# Run the bundled demos
-cargo run -p breakwater-cli -- run examples/policy-bypass
-cargo run -p breakwater-cli -- run examples/ttl-archival
+# Run the bundled demos (each drives `cargo test --test suite` in the example crate)
+cargo run -p breakwater-cli -- run examples/policy-bypass --seed 7
+cargo run -p breakwater-cli -- run examples/ttl-archival --seed 11
 
-# Export the shrunk failure as a unit test
-cargo run -p breakwater-cli -- export examples/policy-bypass --out tests/repro_policy_bypass.rs
+# Export the shrunk failure as a regression test and render a report
+cargo run -p breakwater-cli -- export examples/policy-bypass --seed 7 --out examples/policy-bypass/tests/repro_policy_bypass_7.rs
+cargo run -p breakwater-cli -- run examples/policy-bypass --seed 7 --json run.json
+cargo run -p breakwater-cli -- report run.json --html report.html
 ```
 
-Expected output for the policy demo is a shrunk sequence of the form *agent pays 49 → agent pays 49 → agent pays 49 → cumulative spend exceeds the 100 USDC daily limit* plus a generated test that replays it.
+Real output of the policy demo:
+
+```
+suite: policy-bypass
+seed: 7   auth: suite default   steps: suite default
+────────────────────────────────────────────────────────────────────────
+violation found after 58 cases and 185 steps, shrunk to 3 step(s):
+  #0 transfer       agent      +1 ledgers               amount_usdc=49 -> Success
+  #1 transfer       agent      +10 ledgers              amount_usdc=49 -> Success
+  #2 transfer       agent      +1718 ledgers            amount_usdc=49 -> Success
+violation: agent spent 147 within 17280 ledgers, limit is 100 (rolling_cap)
+reproduce with --seed 7; report: /tmp/breakwater-policy-bypass-7.json
+```
+
+Three payments of 49 USDC, the third landing exactly one policy window (1 728 ledgers) after the first: every single call respected the 50 USDC per-call cap and the "daily" cap, yet the agent spent 147 USDC in a day. Every step ran through the host's real authorization path, so the OpenZeppelin smart account's `__check_auth` and its `SpendingLimit` policies genuinely let it through.
+
+Real output of the archival demo:
+
+```
+suite: ttl-archival
+seed: 11   auth: suite default   steps: suite default
+────────────────────────────────────────────────────────────────────────
+violation found after 63 cases and 621 steps, shrunk to 2 step(s):
+  #0 create_stream  sender     +17280 ledgers (1.0 d)   amount_usdc=1000 duration_ledgers=6307200 -> Success
+  #1 create_stream  sender     +1555200 ledgers (90.0 d) amount_usdc=1000 duration_ledgers=6307200 -> Success
+violation: stream 0 is archived with 275 days left to run (TTL ran out 60.0 days ago) (no_mid_lifecycle_expiry)
+reproduce with --seed 11; report: /tmp/breakwater-ttl-archival-11.json
+```
+
+Exit codes: `0` all invariants held, `1` a violation was found, `2` usage or configuration error. Colours are off when stdout is not a terminal, when `NO_COLOR` is set, or with `--no-color`.
 
 ## Writing a test
 
 ```rust
-use breakwater::{Actor, Handler, Invariant, Suite};
+use breakwater::proptest::prelude::*;
+use breakwater::{Actor, CallContext, CallOutcome, Handler, HandlerError, Invariant, Suite, TxLog, Violation};
 
-struct Pay;
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct PayArgs { amount_usdc: i64 }
+
+struct Pay { wallet: String, actors: Vec<Actor> }   // addresses are kept as strkeys
+
 impl Handler for Pay {
-    fn actors(&self) -> &[Actor] { &[Actor::Agent] }
-    fn call(&self, env: &Env, actor: &Actor, args: &PayArgs) -> Result<(), Error> {
-        wallet::Client::new(env, &self.wallet).pay(actor.address(), &args.to, &args.amount)
+    type Args = PayArgs;
+    fn name(&self) -> &'static str { "pay" }
+    fn actors(&self) -> &[Actor] { &self.actors }
+    fn strategy(&self) -> BoxedStrategy<PayArgs> { (1i64..=50).prop_map(|amount_usdc| PayArgs { amount_usdc }).boxed() }
+    fn call(&self, env: &Env, _ctx: &CallContext, actor: &Actor, args: &PayArgs) -> Result<CallOutcome, HandlerError> {
+        let wallet = Address::from_str(env, &self.wallet);
+        match WalletClient::new(env, &wallet).try_pay(&actor.address(env), &args.amount_usdc) {
+            Ok(Ok(())) => Ok(CallOutcome::Success),
+            Err(Ok(e)) => Ok(CallOutcome::ContractError(e.get_code())),
+            other => Err(HandlerError::Host(format!("{other:?}"))),
+        }
     }
 }
 
-struct DailyCap { limit: i128 }
+struct DailyCap { limit: i64 }
 impl Invariant for DailyCap {
-    fn check(&self, env: &Env, log: &TxLog) -> Result<(), Violation> {
-        let spent = log.spent_in_window(env.ledger().timestamp(), 86_400);
-        if spent > self.limit { return Err(Violation::new("daily cap exceeded", spent)); }
+    fn name(&self) -> &'static str { "daily_cap" }
+    fn check(&self, _env: &Env, log: &TxLog) -> Result<(), Violation> {
+        let spent: i64 = log.successes_of("pay").map(|s| s.args["amount_usdc"].as_i64().unwrap_or(0)).sum();
+        if spent > self.limit { return Err(Violation::new("daily cap exceeded").with_detail(spent)); }
         Ok(())
     }
 }
 
 #[test]
-fn policy_holds_under_fuzz() {
-    Suite::new()
-        .handler(Pay)
-        .invariant(DailyCap { limit: 100_0000000 })
-        .steps(1..=20)
-        .run();
+fn breakwater_suite() {
+    let report = Suite::new("wallet", env)            // `env` holds the deployed contracts
+        .seed(42).steps(1..=20)
+        .handler(Pay { wallet, actors: vec![agent] })
+        .invariant(DailyCap { limit: 100 })
+        .on_restore(move |env| { env.register_at(&Address::from_str(env, &id), Wallet, ()); })
+        .run()
+        .unwrap();
+    breakwater::Exporter::write_if_requested(&report).unwrap();   // hands the result to the CLI
+    assert!(report.failure().is_none());
 }
 ```
 
-The exact API is documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and will settle during the event; the README is updated at submission time.
+A suite is an ordinary `cargo test`; the `breakwater` CLI drives the test named `breakwater_suite` in `tests/suite.rs`, passing seed, step range and auth mode through `BREAKWATER_SEED`, `BREAKWATER_STEPS` and `BREAKWATER_AUTH`, and reads the JSON report the suite writes to `BREAKWATER_REPORT`. The full API, including real-authorization mode and replay, is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); the two example suites under `examples/*/tests/` are the reference implementations.
 
 ## Attack packs
 
 ### `policy-bypass`
 
-Targets OpenZeppelin `stellar-contracts` smart accounts. Built-in invariants:
+Targets OpenZeppelin `stellar-contracts` 0.8.0 smart accounts. Built-in invariants:
 
-- cumulative spend within a rolling window never exceeds the configured limit
-- only allow-listed contracts and functions are ever invoked
-- a revoked or expired signer never authorizes a call
-- the policy / verifier WASM hash pinned at setup is the one that actually ran
+- `RollingCap`: cumulative spend of an actor within a rolling ledger window never exceeds the limit the operator meant
+- `AllowlistOnly`: an actor only ever succeeds with allow-listed calls
+- `RevokedNeverAuths`: once revoked, a signer never authorizes a call again
+- `PinnedWasm`: the policy and verifier executables pinned at setup are the ones in place at every step
 
-Transactions are executed through the real authorization path, so a finding is a real bypass, not an artifact of mocked auth.
+Generators bias toward bypass shapes (amounts just under a cap, ledger gaps that straddle a policy window). Every step runs through the host's real authorization path (`AuthMode::Real`): the pack builds the `SorobanAuthorizationEntry` values an OpenZeppelin account expects, including the nested entry for a delegated signer, so a finding is a real bypass, not an artifact of mocked auth.
+
+The bundled demo (`examples/policy-bypass`) is an unmodified OpenZeppelin smart account whose agent rule carries two `SpendingLimit` policies: 50 USDC per ledger and 100 USDC per "day", where the day was configured as 1 728 ledgers instead of 17 280. `SpendingLimit` counts its window in ledgers, and dividing 86 400 seconds by 50 instead of by 5 is a one-character mistake. The suite finds the three-payment bypass shown above and shrinks it to the window boundary.
 
 ### `ttl-archival`
 
-Advances the ledger according to a simulated usage profile and asserts:
+Advances the ledger according to a usage profile (`LedgerAdvance::daily_then_silence(30, 90)`: one call a day for a month, then a quiet quarter) and asserts:
 
-- no storage key the business logic still depends on reaches TTL expiry mid-lifecycle
-- after an archived entry is restored, the contract's public functions still succeed
-- instance and persistent entries are extended on the schedule the contract claims
+- `NoMidLifecycleExpiry`: no persistent entry a running stream depends on runs out of TTL
+- `InstanceAlive`: the contract instance stays alive while any stream is running
+- `RestoreRestoresFunction`: after an archived entry is restored, `withdraw` and `cancel` still work (checked on a throwaway copy of the ledger, so the probe never disturbs the run)
+
+What expiry means on Soroban since Protocol 23: an archived persistent or instance entry is not lost, and a call that touches it does not simply fail. Every later transaction must carry a restore footprint (simulation adds it) and pay restoration fees, and a transaction built without one fails. The pack therefore reads each entry's `live_until` directly from the ledger entries, because any contract read, and the SDK's own `get_ttl` test helper, would restore the entry and hide the finding.
+
+The bundled demo (`examples/ttl-archival`) is a payment stream that keeps streams in persistent storage and never calls `extend_ttl`. Under the profile above, a one-year stream is archived after the quiet quarter with 275 days left to run; `PaymentStreamFixed`, which extends every touched entry to the stream's remaining duration, survives the same profile.
 
 ## How Stellar is used
 

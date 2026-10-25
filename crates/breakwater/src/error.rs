@@ -17,6 +17,9 @@ pub enum SuiteError {
     /// The configured step range is empty.
     #[error("step range is empty")]
     EmptySteps,
+    /// A recorded step could not be mapped onto the suite's handlers.
+    #[error("replay failed: {0}")]
+    Replay(String),
     /// proptest aborted the run, for example after too many rejected cases.
     #[error("fuzzing aborted: {0}")]
     Aborted(String),
