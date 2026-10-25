@@ -55,9 +55,7 @@ node_modules/
 *.tmp
 
 # ---- Demo / submission scratch ----
-demo/recordings/
-pitch/*.key
-pitch/~$*
+~$*
 
 # ---- Pitch deck working files (the template is not committed) ----
 docs/deck/template.pptx
