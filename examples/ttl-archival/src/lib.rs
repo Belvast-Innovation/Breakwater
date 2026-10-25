@@ -8,12 +8,15 @@
 //! The deliberate defect: [`PaymentStream`] never calls `extend_ttl`. Every
 //! entry keeps the TTL it got when it was created, so a one-year stream is
 //! archived as soon as the network's minimum persistent TTL runs out, even
-//! though the business logic says it has months to go. [`fixed::PaymentStreamFixed`]
-//! is the same contract with the extensions in place, used as the control.
+//! though the business logic says it has months to go. Its second defect is
+//! `bump_ttl`: a public, unauthenticated, uncapped TTL extension, which lets
+//! anyone keep entries alive at the contract's rent. [`fixed::PaymentStreamFixed`]
+//! is the same contract with the extensions in place and `bump_ttl` guarded,
+//! used as the control.
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, token, Address, Env,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, token, Address, Env, Vec,
 };
 
 /// Storage layout. `Token` and `NextId` are instance entries, `Stream(id)` is
@@ -207,6 +210,46 @@ mod logic {
     pub fn get_stream(env: &Env, id: u64) -> Stream {
         load(env, id)
     }
+
+    /// Withdraws from several streams in one invocation. Every stream in
+    /// `ids` must be withdrawable; the total paid is returned.
+    pub fn withdraw_many<const EXTEND: bool>(env: &Env, ids: Vec<u64>) -> i128 {
+        let mut total = 0i128;
+        for id in ids.iter() {
+            total += withdraw::<EXTEND>(env, id);
+        }
+        total
+    }
+
+    /// Extends the TTL of a stream entry and of the instance so that both
+    /// live at least `ledgers` more ledgers. The buggy contract exposes this
+    /// without any authorization or cap: anyone can keep any entry alive for
+    /// as long as the network allows, at the contract's rent.
+    pub fn bump_ttl_unchecked(env: &Env, id: u64, ledgers: u32) {
+        if !env.storage().persistent().has(&DataKey::Stream(id)) {
+            panic_with_error!(env, StreamError::StreamNotFound);
+        }
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Stream(id), ledgers, ledgers);
+        env.storage().instance().extend_ttl(ledgers, ledgers);
+    }
+
+    /// The fixed contract's version: only the sender may extend, and never
+    /// beyond the stream's remaining duration.
+    pub fn bump_ttl_checked(env: &Env, id: u64, ledgers: u32) {
+        let stream = load(env, id);
+        stream.sender.require_auth();
+        let remaining = stream
+            .end_ledger
+            .saturating_sub(env.ledger().sequence())
+            .max(1);
+        let ledgers = ledgers.min(remaining);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Stream(id), ledgers, ledgers);
+        env.storage().instance().extend_ttl(ledgers, ledgers);
+    }
 }
 
 /// The buggy contract: correct accounting, no TTL management.
@@ -246,6 +289,17 @@ impl PaymentStream {
     /// Reads a stream.
     pub fn get_stream(env: Env, id: u64) -> Stream {
         logic::get_stream(&env, id)
+    }
+
+    /// Withdraws from several streams in one call; returns the total paid.
+    pub fn withdraw_many(env: Env, ids: Vec<u64>) -> i128 {
+        logic::withdraw_many::<false>(&env, ids)
+    }
+
+    /// Extends the stream's and the instance's TTL by `ledgers`. Deliberately
+    /// unauthenticated and uncapped: the second defect of this contract.
+    pub fn bump_ttl(env: Env, id: u64, ledgers: u32) {
+        logic::bump_ttl_unchecked(&env, id, ledgers)
     }
 }
 
@@ -290,6 +344,17 @@ pub mod fixed {
         /// Reads a stream.
         pub fn get_stream(env: Env, id: u64) -> Stream {
             logic::get_stream(&env, id)
+        }
+
+        /// Withdraws from several streams in one call; returns the total paid.
+        pub fn withdraw_many(env: Env, ids: Vec<u64>) -> i128 {
+            logic::withdraw_many::<true>(&env, ids)
+        }
+
+        /// Sender-only TTL extension, capped at the stream's remaining
+        /// duration.
+        pub fn bump_ttl(env: Env, id: u64, ledgers: u32) {
+            logic::bump_ttl_checked(&env, id, ledgers)
         }
     }
 }
