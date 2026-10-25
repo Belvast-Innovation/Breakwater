@@ -112,16 +112,24 @@ Two modes, chosen per suite:
 
 | Mode | How | Used by |
 | --- | --- | --- |
-| `MockAll` | `env.mock_all_auths()` | general handlers where auth is not what is under test |
-| `Real` | Build `AuthorizedInvocation` trees and let the host invoke the custom account's `__check_auth` | `policy-bypass` pack |
+| `MockAll` | `env.mock_all_auths()` on every restored `Env` | general handlers where auth is not what is under test |
+| `Real` | No mocking. Before each call the handler installs real `SorobanAuthorizationEntry` values with `env.set_auths(..)`; the host runs the custom account's `__check_auth` and its policies | `policy-bypass` pack |
 
-In `Real` mode the smart account's policies are genuinely enforced by the Soroban host, so a sequence that gets through is a real bypass, not a mocking artifact. The pack also uses `try_invoke_contract_check_auth` in unit tests to exercise `__check_auth` directly.
+In `Real` mode the smart account's policies are genuinely enforced by the Soroban host, so a sequence that gets through is a real bypass, not a mocking artifact. The pieces:
+
+- `breakwater::auth` (core, protocol-level): `contract_fn` builds the invocation tree, `signature_payload` hashes the `HashIdPreimage::SorobanAuthorization` the host expects to be signed, `address_entry` wraps it all in `SorobanAddressCredentials`. `CallContext` gives each step a unique nonce and a signature expiration ledger.
+- `breakwater_pack_policy_bypass::auth::authorize` (OpenZeppelin-specific): produces the account entry whose signature is an `AuthPayload { signers, context_rule_ids }`. An `External` signer signs the SHA-256 digest of `AuthDigestPreimage { account, signature_payload, context_rule_ids }`. A `Delegated` signer gets a second entry whose root invocation is `account.__check_auth(preimage)`, because the account authenticates it with `require_auth_for_args`.
+- `classify` maps the result of a `try_` call: a `Contract` error is `CallOutcome::ContractError`; an `Auth` error or `Error(Context, InvalidAction)` (how the host surfaces a `__check_auth` rejection to the caller) is `CallOutcome::Unauthorized`; anything else is a bug.
+
+Measured on the demo suite (Apple Silicon, debug build): 86 cases and 280 steps in 1.3 s, about 5 ms per step including two policy calls, an Ed25519 signature and the nested owner entry. Generation therefore runs under `Real` directly; the fallback of generating under `MockAll` and re-verifying only the shrunk sequence under `Real` was not needed.
 
 ## 5. Attack packs
 
 ### `policy-bypass`
 
-Target: an OpenZeppelin `stellar-contracts` smart account with an agent signer plus a spending-limit policy and a context rule.
+Target: an OpenZeppelin `stellar-contracts` 0.8.0 smart account (`examples/policy-bypass`) with two context rules: rule 0 (`Default`) for the owner, a `Signer::Delegated` hardware-key account, and rule 1 (`CallContract(usdc)`) for the agent, a `Signer::External` Ed25519 key, carrying two `SpendingLimit` policy instances: 50 USDC per ledger (the de-facto per-call cap) and 100 USDC per "day".
+
+The deliberate defect is in that last number. OpenZeppelin's `SpendingLimit` measures its window in **ledgers** (`period_ledgers`), and at Stellar's ~5 s close time a day is 17 280 ledgers. The demo installs 1 728, as an operator who divides 86 400 s by 50 instead of 5 would. Every single call still respects both caps; only a sequence that waits out the 2.4-hour window shows that "100 USDC per day" is really "100 USDC per 2.4 hours". Mistaking a day for a ledger count is exactly the kind of real-world configuration error the pack exists to catch.
 
 | Invariant | What it asserts |
 | --- | --- |
@@ -130,7 +138,9 @@ Target: an OpenZeppelin `stellar-contracts` smart account with an agent signer p
 | `RevokedNeverAuths` | no call succeeded with a signer revoked earlier in the sequence |
 | `PinnedWasm` | policy/verifier WASM hashes at check time equal those at setup |
 
-Generators bias toward known bypass shapes: many small payments just under per-tx caps, calls straddling window boundaries, interleaved signer rotation.
+Generators bias toward known bypass shapes: `amount_near_cap` draws mostly `cap - 1`, and `window_straddling_advance` draws ledger gaps uniformly over one and a half policy windows so about a third of them cross the boundary. Signer rotation is represented by the owner's `revoke_agent` handler (`remove_signer`). Re-creating the agent's rule (`remove_context_rule` + `add_context_rule`) is not generated yet: under `Real` auth the policy `install` callbacks require the sub-invocation tree, including the not-yet-assigned rule id, to be pre-built in the owner's authorization entry. That is deferred.
+
+Invariants evaluate the `TxLog`: `RollingCap` sums the agent's successful `transfer` amounts inside the intended window (17 280 ledgers) and fires when the sum exceeds 100 USDC, however the policy was configured. `PinnedWasm` compares `Address::executable()` of the account, policies and verifier against the values captured at setup.
 
 ### `ttl-archival`
 
@@ -170,9 +180,10 @@ Exit codes: `0` all invariants held, `1` violation found (reproduction exported)
 
 - How the CLI drives a suite: `breakwater run <suite-dir>` executes `cargo test --test suite` in the target directory, passes the seed and step range through environment variables, and parses the JSON the suite prints. No separate `suite` binary per example. Implementation lands in the `feat(cli)` PR.
 - `soroban-fork` is not a dependency for the hackathon build: it currently supports `soroban-sdk` 25.x only and the workspace is pinned to 28.0.0. Mainnet-state fuzzing stays a roadmap item.
+- `Real` auth runs end to end at about 5 ms per step on the demo suite, so generation uses `Real` directly (see §4).
 
 **Open**
 
 - Whether `proptest-state-machine` preconditions are expressive enough for the policy generators, or whether a custom `Strategy` is needed.
-- Cost of `Real` auth per step; if too slow, run `MockAll` for generation and re-verify only the shrunk sequence under `Real`.
+- Generating smart-account rule rotation (`remove_context_rule` + `add_context_rule`) under `Real` auth: policy `install` callbacks need pre-built sub-invocations. Interesting because re-creating a rule reinstalls `SpendingLimit` with an empty history, which is a second way to reset the window.
 - Whether to export reproductions as `#[test]` functions or as a JSON step list plus a generic replay test. Decided in two stages: the core `Exporter` emits the JSON step list (`suite`, `seed`, `outcome.status`, `outcome.violation`, `outcome.failing_step`, `outcome.log.steps[]`); the CLI's `export` command renders a Rust `#[test]` from it.

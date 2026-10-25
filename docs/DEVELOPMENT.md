@@ -75,6 +75,7 @@ stellar contract build --package example-ttl-archival
 | `proptest`, `proptest-state-machine` | Random sequence generation and automatic shrinking | https://docs.rs/proptest-state-machine |
 | OpenZeppelin `stellar-contracts` | Smart-account, policy and signer contracts used as the demo target | https://docs.openzeppelin.com/stellar-contracts |
 | `clap`, `serde`, `serde_json`, `anyhow`, `thiserror` | CLI, report serialisation, error handling | docs.rs |
+| `ed25519-dalek` | Signs the `AuthDigestPreimage` digest for External (Ed25519) smart-account signers in `AuthMode::Real` | https://docs.rs/ed25519-dalek |
 | `soroban-fork` (not yet a dependency) | Lazy-loading mainnet/testnet fork for fuzzing live state. Currently supports `soroban-sdk` 25.x only; it will be added once it supports SDK 28 | https://docs.rs/soroban-fork |
 
 Versions are pinned in `Cargo.toml`; `Cargo.lock` is committed.
