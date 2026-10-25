@@ -276,10 +276,21 @@ Stellar documentation was pulled into the AI context through the official **Rave
 
 ## Roadmap
 
-- Attack pack for resource-budget regression (`forge snapshot`-style CI gate)
-- `soroban-fork` integration to fuzz against live mainnet state (blocked until `soroban-fork` supports `soroban-sdk` 28; it currently targets 25.x)
-- Macro-based suite declaration (`#[breakwater::suite]`)
-- Publish to crates.io; apply to the Stellar Community Fund (Build / Public Goods)
+**Near term**
+
+- Rule-rotation probe for `policy-bypass`: generate `remove_context_rule` + `add_context_rule` under real auth, since a re-created rule starts `SpendingLimit` with an empty history
+- Malicious keep-alive: bias generators toward unbounded `extend_ttl` calls on every public entry point, building on `NoUnboundedTtlExtension`
+- Restoration-cost budget as a CI gate: per-step resource ceilings from `RestoreCostWithinBudget`, compared run over run
+- Export of `stellar-cli` replay scripts and unsigned transaction XDR next to the Rust reproduction
+
+**Later**
+
+- Coverage-guided mutation of sequences instead of random generation
+- Declarative construction of authorization trees for custom accounts
+- Shadow-state assertions: a reference model of the contract checked against the ledger after every step
+- Mainnet fork via `soroban-fork` once it supports `soroban-sdk` 28 (it currently targets 25.x)
+- AI-assisted generation of handlers and invariants from a contract's interface
+- GitHub Action packaging; publish to crates.io; apply to the Stellar Community Fund (Build / Public Goods)
 
 ## Team
 
