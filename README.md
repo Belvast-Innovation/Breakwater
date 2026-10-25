@@ -8,7 +8,7 @@
 
 <p>
   <a href="https://github.com/Belvast-Innovation/Breakwater/actions/workflows/ci.yml"><img src="https://github.com/Belvast-Innovation/Breakwater/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-blue" alt="License: Apache-2.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Belvast-Innovation/Breakwater" alt="License"></a>
   <a href="https://github.com/Belvast-Innovation/Breakwater/commits/main"><img src="https://img.shields.io/github/last-commit/Belvast-Innovation/Breakwater" alt="Last commit"></a>
   <a href="https://www.conventionalcommits.org/en/v1.0.0/"><img src="https://img.shields.io/badge/Conventional%20Commits-1.0.0-FE5196?logo=conventionalcommits&logoColor=white" alt="Conventional Commits 1.0.0"></a>
 </p>
@@ -388,4 +388,4 @@ Stellar documentation was pulled into the AI context through the official **Rave
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE).
+Apache-2.0. See [`LICENSE`](LICENSE). See [`NOTICE`](NOTICE) for attribution.
