@@ -167,12 +167,11 @@ If `gh api` is unavailable, set the same options manually under *Settings → Ru
 
 ## 8. Timeline (Europe/Lisbon)
 
-Done on Sunday 25 October: workspace and CI, core runner with shrinking and JSON export, both attack packs with their demos finding their bugs, the CLI (`run | export | report`), Testnet deployment and the first two replayed payments.
+Done on Sunday 25 October: workspace and CI, core runner with shrinking and JSON export, both attack packs with their demos finding their bugs, the CLI (`run | export | report`), Testnet deployment and all three replayed payments.
 
 | When | What |
 | --- | --- |
-| Sun 25 Oct, 17:57 | Scheduled: third replayed payment on Testnet (one policy window after the first); its hash goes into the README table |
-| Mon 09:15 – 10:30 | Confirm the third hash is in the README; final README read-through against real `breakwater run` output |
+| Mon 09:15 – 10:30 | Final README read-through against real `breakwater run` output |
 | Mon 10:30 – 11:00 | Demo video (2–4 min, YouTube), two takes, fixed seeds 7 and 11 |
 | Mon 11:00 – 11:20 | Pitch deck to PDF (≤ 20 MiB) following `docs/SUBMISSION.md` |
 | Mon 11:20 – 11:40 | Final `main` merge, CI green, `git log` sanity check |
