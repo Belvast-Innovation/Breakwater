@@ -37,7 +37,7 @@ pub use error::SuiteError;
 pub use export::Exporter;
 pub use handler::{CallContext, CallOutcome, Handler, HandlerError, StepArgs};
 pub use invariant::{Invariant, Violation, ViolationKind};
-pub use ledger::LedgerAdvance;
+pub use ledger::{LedgerAdvance, LEDGERS_PER_DAY, SECONDS_PER_LEDGER};
 pub use log::{Gap, StepOutcome, StepRecord, TxLog};
 pub use step::Step;
 pub use suite::{Failure, Outcome, RunReport, Suite};

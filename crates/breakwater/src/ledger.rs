@@ -21,12 +21,11 @@ pub enum LedgerAdvance {
         /// Seconds per step.
         seconds: u64,
     },
-    /// Advance by a random amount drawn from the given inclusive ranges.
+    /// Advance by a random number of ledgers drawn from the inclusive range;
+    /// the timestamp moves by [`SECONDS_PER_LEDGER`] per ledger.
     Random {
         /// Range of ledgers per step.
         ledgers: std::ops::RangeInclusive<u32>,
-        /// Range of seconds per step.
-        seconds: std::ops::RangeInclusive<u64>,
     },
     /// A usage profile: `(steps, gap)` segments applied in order. After the
     /// last segment is exhausted its gap keeps applying.
@@ -36,13 +35,34 @@ pub enum LedgerAdvance {
     Profile(Vec<(usize, Gap)>),
 }
 
+/// Stellar's approximate ledger close time, used to derive timestamps from
+/// ledger counts.
+pub const SECONDS_PER_LEDGER: u64 = 5;
+
+/// Ledgers in one day at [`SECONDS_PER_LEDGER`].
+pub const LEDGERS_PER_DAY: u32 = 86_400 / SECONDS_PER_LEDGER as u32;
+
 impl Default for LedgerAdvance {
     /// One ledger and five seconds per step, roughly Stellar's close time.
     fn default() -> Self {
         LedgerAdvance::Fixed {
             ledgers: 1,
-            seconds: 5,
+            seconds: SECONDS_PER_LEDGER,
         }
+    }
+}
+
+impl LedgerAdvance {
+    /// A usage profile in days: `active_days` steps one day apart, then one
+    /// step after `silent_days` of nothing, after which the silent gap repeats.
+    ///
+    /// `daily_then_silence(30, 90)` is "used once a day for a month, then
+    /// forgotten for a quarter".
+    pub fn daily_then_silence(active_days: usize, silent_days: u32) -> Self {
+        LedgerAdvance::Profile(vec![
+            (active_days, Gap::ledgers(LEDGERS_PER_DAY)),
+            (1, Gap::ledgers(silent_days.saturating_mul(LEDGERS_PER_DAY))),
+        ])
     }
 }
 
@@ -56,9 +76,7 @@ impl LedgerAdvance {
                 seconds: *seconds,
             })
             .boxed(),
-            LedgerAdvance::Random { ledgers, seconds } => (ledgers.clone(), seconds.clone())
-                .prop_map(|(ledgers, seconds)| Gap { ledgers, seconds })
-                .boxed(),
+            LedgerAdvance::Random { ledgers } => ledgers.clone().prop_map(Gap::ledgers).boxed(),
             LedgerAdvance::Profile(segments) => {
                 Just(Self::profile_gap(segments, step_index)).boxed()
             }

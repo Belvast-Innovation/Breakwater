@@ -13,6 +13,17 @@ pub struct Gap {
     pub seconds: u64,
 }
 
+impl Gap {
+    /// A gap of `ledgers` ledgers with the timestamp moving at Stellar's
+    /// approximate close time of five seconds per ledger.
+    pub fn ledgers(ledgers: u32) -> Self {
+        Self {
+            ledgers,
+            seconds: u64::from(ledgers) * crate::ledger::SECONDS_PER_LEDGER,
+        }
+    }
+}
+
 /// What happened when a step was executed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]

@@ -379,6 +379,8 @@ name = "breakwater-pack-ttl-archival"
 version = "0.1.0"
 dependencies = [
  "breakwater",
+ "serde",
+ "serde_json",
  "soroban-sdk",
 ]
 
@@ -997,6 +999,9 @@ version = "0.1.0"
 dependencies = [
  "breakwater",
  "breakwater-pack-ttl-archival",
+ "example-ttl-archival",
+ "serde",
+ "serde_json",
  "soroban-sdk",
 ]
 

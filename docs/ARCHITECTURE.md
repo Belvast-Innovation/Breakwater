@@ -66,8 +66,10 @@ Controls how `env.ledger()` moves between steps. The gap is generated as part of
 
 - `Still`
 - `Fixed { ledgers, seconds }` (default: one ledger, five seconds)
-- `Random { ledgers: RangeInclusive<u32>, seconds: RangeInclusive<u64> }`
-- `Profile(Vec<(usize, Gap)>)` — a usage profile for the `ttl-archival` pack: e.g. "daily use for 30 days, then nothing for 90 days"; the last segment's gap repeats once the profile is exhausted
+- `Random { ledgers: RangeInclusive<u32> }`; the timestamp follows at `SECONDS_PER_LEDGER` (5 s) per ledger
+- `Profile(Vec<(usize, Gap)>)` — a usage profile: `(steps, gap)` segments applied in order, the last gap repeating once the profile is exhausted. `LedgerAdvance::daily_then_silence(30, 90)` builds "one call a day for 30 days, then nothing for 90 days", the profile the `ttl-archival` pack runs under.
+
+Because the gap is stored in each generated step, shrinking keeps the gaps of the steps it retains: a profile-driven failure shrinks to the few steps that carry the decisive gaps (for the stream demo: the creation and the step after the 90-day silence).
 
 ## 3. Execution pipeline
 
@@ -144,15 +146,22 @@ Invariants evaluate the `TxLog`: `RollingCap` sums the agent's successful `trans
 
 ### `ttl-archival`
 
-Target: a payment-stream contract that writes streams to persistent storage and config to instance storage but never calls `extend_ttl`.
+Target: `examples/ttl-archival`, a payment stream (`create_stream`, `withdraw`, `cancel`) that keeps streams in persistent storage and the token address plus id counter in instance storage, and never calls `extend_ttl`. `PaymentStreamFixed` (behind the `fixed` feature) is the same contract extending every touched entry to the stream's remaining duration; it is the control.
+
+Two facts about `soroban-sdk` 28 shape the pack:
+
+- **Archived persistent and instance entries are restored on access.** Since Protocol 23 a transaction whose restore list names an archived entry restores it before running (simulation fills that list); the test `Env` emulates this, so a contract read of an archived entry succeeds and resets the entry's TTL to the network minimum. Only temporary entries vanish. The `testutils` `get_ttl` getters go through the same path and therefore cannot observe an archived entry.
+- **`live_until` can be read without touching the entry.** `env.host().get_stored_entries()` lists every ledger entry with its `live_until`; `breakwater_pack_ttl_archival::ttl` filters it by contract, key and durability. That is the only side-effect-free probe, and it is what the invariants use.
+
+Invariants read the set of running streams from the `TxLog` (`StreamModel`: creations, cancellations, durations; ids follow creation order), never from the contract, so checking never restores anything:
 
 | Invariant | What it asserts |
 | --- | --- |
-| `NoMidLifecycleExpiry` | for every live stream, `env.storage().persistent().get_ttl(key) > 0` while `stream.end > now` |
-| `InstanceAlive` | the contract instance TTL has not expired while any stream is live |
-| `RestoreRestoresFunction` | after simulating archive + restore, `withdraw` / `cancel` still succeed |
+| `NoMidLifecycleExpiry` | every running stream's persistent entry has TTL > 0 (0 is the last live ledger; negative means archived) |
+| `InstanceAlive` | while any stream is running, the contract instance has TTL > 0 |
+| `RestoreRestoresFunction` | for every running stream whose entry is archived, a throwaway `Env::from_ledger_snapshot` copy is taken, natives are re-registered, and a suite-supplied probe calls `withdraw` and `cancel` there; both must succeed (or `withdraw` may report `NothingToWithdraw`). The fuzzed `Env` is untouched |
 
-The `LedgerAdvance::Profile` clock is what makes this pack bite: a 30-day active period followed by a long gap pushes entries past their TTL while the stream is logically still running.
+The usage profile is what makes the pack bite. The demo `Env` sets the minimum persistent TTL to 30 days (a demo value; the real one is a network parameter shown on Stellar Lab). Under `daily_then_silence(30, 90)` the buggy contract fails in two steps: `create_stream` (365 days), then 90 days of silence, and the next call finds stream 0 archived with 275 days left to run, its TTL having run out 60 days earlier. What this means on-chain: the stream is not lost, but every later transaction touching it must carry a restore list and pay restoration fees, and a hand-built transaction without one fails. The fixed contract holds under the same profile. Measured: 63 cases and 621 steps in 0.6 s under `MockAll`.
 
 ## 6. CLI
 
@@ -186,4 +195,5 @@ Exit codes: `0` all invariants held, `1` violation found (reproduction exported)
 
 - Whether `proptest-state-machine` preconditions are expressive enough for the policy generators, or whether a custom `Strategy` is needed.
 - Generating smart-account rule rotation (`remove_context_rule` + `add_context_rule`) under `Real` auth: policy `install` callbacks need pre-built sub-invocations. Interesting because re-creating a rule reinstalls `SpendingLimit` with an empty history, which is a second way to reset the window.
+- Stream ids in the `ttl-archival` pack are inferred from creation order because the log carries no return values. Recording handler return values in `StepRecord` would make the model exact.
 - Whether to export reproductions as `#[test]` functions or as a JSON step list plus a generic replay test. Decided in two stages: the core `Exporter` emits the JSON step list (`suite`, `seed`, `outcome.status`, `outcome.violation`, `outcome.failing_step`, `outcome.log.steps[]`); the CLI's `export` command renders a Rust `#[test]` from it.
