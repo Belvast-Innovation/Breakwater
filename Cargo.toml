@@ -1,0 +1,55 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/breakwater",
+    "crates/breakwater-cli",
+    "crates/packs/policy-bypass",
+    "crates/packs/ttl-archival",
+    "examples/policy-bypass",
+    "examples/ttl-archival",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91"
+license = "Apache-2.0"
+repository = "https://github.com/Belvast-Innovation/Breakwater"
+publish = false
+
+[workspace.dependencies]
+# Soroban / Stellar. Pinned exactly: Protocol 28 release; OpenZeppelin 0.8.0 requires ^28.0.0.
+soroban-sdk = "=28.0.0"
+stellar-accounts = "=0.8.0"
+stellar-contract-utils = "=0.8.0"
+
+# Sequence generation and shrinking. proptest-state-machine 0.9.0 requires proptest ^1.12.
+proptest = "=1.12.0"
+proptest-state-machine = "=0.9.0"
+
+# CLI and reporting.
+clap = { version = "4.6", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "2"
+
+# Workspace crates.
+breakwater = { path = "crates/breakwater" }
+breakwater-pack-policy-bypass = { path = "crates/packs/policy-bypass" }
+breakwater-pack-ttl-archival = { path = "crates/packs/ttl-archival" }
+
+# Release profile recommended by the Stellar docs for wasm32v1-none contract builds.
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
+
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true

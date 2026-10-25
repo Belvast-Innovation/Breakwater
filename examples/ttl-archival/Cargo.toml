@@ -1,0 +1,21 @@
+[package]
+name = "example-ttl-archival"
+description = "Payment-stream contract that never extends TTL, used as the ttl-archival demo target"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+breakwater = { workspace = true }
+breakwater-pack-ttl-archival = { workspace = true }
