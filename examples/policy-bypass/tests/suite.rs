@@ -61,12 +61,12 @@ fn single_calls_behave_as_the_policies_prescribe() {
     };
 
     assert!(
-        matches!(pay(0, 49), Ok(CallOutcome::Success)),
+        matches!(pay(0, 49), Ok(o) if o.is_success()),
         "first 49 USDC passes both caps"
     );
     bump(&env);
     assert!(
-        matches!(pay(1, 49), Ok(CallOutcome::Success)),
+        matches!(pay(1, 49), Ok(o) if o.is_success()),
         "98 USDC is still under the daily cap"
     );
     bump(&env);
@@ -91,7 +91,7 @@ fn single_calls_behave_as_the_policies_prescribe() {
     assert!(
         matches!(
             revoke.call(&env, &ctx(5), &owner, &()),
-            Ok(CallOutcome::Success)
+            Ok(o) if o.is_success()
         ),
         "the owner revokes the agent through the nested delegated entry"
     );

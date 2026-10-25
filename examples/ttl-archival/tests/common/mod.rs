@@ -21,7 +21,8 @@ use breakwater::{
     RunReport, Suite, SuiteConfig, LEDGERS_PER_DAY,
 };
 use breakwater_pack_ttl_archival::{
-    InstanceAlive, NoMidLifecycleExpiry, RestoreRestoresFunction, StreamModel,
+    InstanceAlive, NoMidLifecycleExpiry, NoUnboundedTtlExtension, ResourceBudget,
+    RestoreCostWithinBudget, RestoreRestoresFunction, StreamModel,
 };
 use example_ttl_archival::fixed::{PaymentStreamFixed, PaymentStreamFixedClient};
 use example_ttl_archival::{DataKey, PaymentStream, PaymentStreamClient, StreamError};
@@ -159,11 +160,20 @@ impl Handler for CreateStream {
             &args.duration_ledgers
         ));
         match result {
-            Ok(Ok(_)) => Ok(CallOutcome::Success),
+            Ok(Ok(id)) => Ok(CallOutcome::returning(id)),
             Ok(Err(e)) => Err(HandlerError::Other(format!("conversion: {e:?}"))),
             Err(Ok(e)) => classify(e),
             Err(Err(e)) => Err(HandlerError::Host(format!("{e:?}"))),
         }
+    }
+}
+
+/// Renders a token amount for the log: whole units when exact, else stroops.
+pub fn amount_value(stroops: i128) -> serde_json::Value {
+    if stroops % USDC == 0 {
+        serde_json::json!({ "usdc": i64::try_from(stroops / USDC).unwrap_or(i64::MAX) })
+    } else {
+        serde_json::json!({ "stroops": stroops.to_string() })
     }
 }
 
@@ -205,7 +215,7 @@ impl Handler for Withdraw {
     ) -> Result<CallOutcome, HandlerError> {
         let result = with_client!(self.fx, env, |c| c.try_withdraw(&args.stream));
         match result {
-            Ok(Ok(_)) => Ok(CallOutcome::Success),
+            Ok(Ok(paid)) => Ok(CallOutcome::returning(amount_value(paid))),
             Ok(Err(e)) => Err(HandlerError::Other(format!("conversion: {e:?}"))),
             Err(Ok(e)) => classify(e),
             Err(Err(e)) => Err(HandlerError::Host(format!("{e:?}"))),
@@ -242,7 +252,113 @@ impl Handler for Cancel {
     ) -> Result<CallOutcome, HandlerError> {
         let result = with_client!(self.fx, env, |c| c.try_cancel(&args.stream));
         match result {
-            Ok(Ok(())) => Ok(CallOutcome::Success),
+            Ok(Ok(())) => Ok(CallOutcome::returning(())),
+            Ok(Err(e)) => Err(HandlerError::Other(format!("conversion: {e:?}"))),
+            Err(Ok(e)) => classify(e),
+            Err(Err(e)) => Err(HandlerError::Host(format!("{e:?}"))),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BumpArgs {
+    pub stream: u64,
+    pub ledgers: u32,
+}
+
+/// `bump_ttl(stream, ledgers)`: the keep-alive entry point anyone may call on
+/// the buggy contract. The strategy favours the largest extension the network
+/// accepts (`max_entry_ttl - 1` in the test `Env`).
+pub struct BumpTtl {
+    pub fx: Arc<Fixture>,
+    pub actors: Vec<Actor>,
+}
+
+/// Largest TTL the demo `Env` accepts (SDK default `max_entry_ttl` minus one).
+pub const MAX_TTL: u32 = 6_312_000 - 1;
+
+impl Handler for BumpTtl {
+    type Args = BumpArgs;
+
+    fn name(&self) -> &'static str {
+        "bump_ttl"
+    }
+
+    fn actors(&self) -> &[Actor] {
+        &self.actors
+    }
+
+    fn strategy(&self) -> BoxedStrategy<BumpArgs> {
+        (
+            0u64..3,
+            prop_oneof![
+                4 => Just(MAX_TTL),
+                1 => (30 * LEDGERS_PER_DAY)..=MAX_TTL,
+            ],
+        )
+            .prop_map(|(stream, ledgers)| BumpArgs { stream, ledgers })
+            .boxed()
+    }
+
+    fn call(
+        &self,
+        env: &Env,
+        _ctx: &CallContext,
+        _actor: &Actor,
+        args: &BumpArgs,
+    ) -> Result<CallOutcome, HandlerError> {
+        let result = with_client!(self.fx, env, |c| c
+            .try_bump_ttl(&args.stream, &args.ledgers));
+        match result {
+            Ok(Ok(())) => Ok(CallOutcome::returning(())),
+            Ok(Err(e)) => Err(HandlerError::Other(format!("conversion: {e:?}"))),
+            Err(Ok(e)) => classify(e),
+            Err(Err(e)) => Err(HandlerError::Host(format!("{e:?}"))),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ManyArgs {
+    pub streams: Vec<u64>,
+}
+
+/// `withdraw_many(streams)`: one call that touches several stream entries.
+pub struct WithdrawMany {
+    pub fx: Arc<Fixture>,
+    pub actors: Vec<Actor>,
+}
+
+impl Handler for WithdrawMany {
+    type Args = ManyArgs;
+
+    fn name(&self) -> &'static str {
+        "withdraw_many"
+    }
+
+    fn actors(&self) -> &[Actor] {
+        &self.actors
+    }
+
+    fn strategy(&self) -> BoxedStrategy<ManyArgs> {
+        prop::collection::btree_set(0u64..4, 1..=4)
+            .prop_map(|set| ManyArgs {
+                streams: set.into_iter().collect(),
+            })
+            .boxed()
+    }
+
+    fn call(
+        &self,
+        env: &Env,
+        _ctx: &CallContext,
+        _actor: &Actor,
+        args: &ManyArgs,
+    ) -> Result<CallOutcome, HandlerError> {
+        let ids = soroban_sdk::Vec::from_slice(env, &args.streams);
+        let result = with_client!(self.fx, env, |c| c.try_withdraw_many(&ids));
+        match result {
+            Ok(Ok(paid)) => Ok(CallOutcome::returning(amount_value(paid))),
             Ok(Err(e)) => Err(HandlerError::Other(format!("conversion: {e:?}"))),
             Err(Ok(e)) => classify(e),
             Err(Err(e)) => Err(HandlerError::Host(format!("{e:?}"))),
@@ -359,4 +475,87 @@ pub fn suite_with_config(variant: Variant, config: SuiteConfig) -> Suite {
         probe,
     })
     .on_restore(move |env| restore_native(env, &hook_fx))
+}
+
+/// A suite for the keep-alive defect: streams are created and anyone calls
+/// `bump_ttl`. The only invariant is `NoUnboundedTtlExtension` with one day of
+/// slack past each stream's end.
+pub fn keep_alive_suite(variant: Variant, seed: u64, cases: u32) -> Suite {
+    let (env, fx) = setup(variant);
+    let fx = Arc::new(fx);
+    let sender = Actor::from_address("sender", &addr(&env, &fx.sender));
+    let anyone = Actor::generate(&env, "anyone");
+    let key: breakwater_pack_ttl_archival::StreamKey =
+        Arc::new(|env: &Env, id: u64| DataKey::Stream(id).into_val(env));
+    let hook_fx = fx.clone();
+    Suite::new("ttl-archival-keep-alive", env)
+        .config(SuiteConfig {
+            seed,
+            steps: 2..=8,
+            cases,
+            auth: AuthMode::MockAll,
+            ..SuiteConfig::default()
+        })
+        .ledger_advance(LedgerAdvance::Fixed {
+            ledgers: LEDGERS_PER_DAY,
+            seconds: 86_400,
+        })
+        .handler(CreateStream {
+            fx: fx.clone(),
+            actors: vec![sender],
+        })
+        .handler(BumpTtl {
+            fx: fx.clone(),
+            actors: vec![anyone],
+        })
+        .invariant(NoUnboundedTtlExtension {
+            contract: fx.contract.clone(),
+            model: StreamModel::default(),
+            key,
+            watch_instance: true,
+            slack_ledgers: LEDGERS_PER_DAY,
+            max_extension_ledgers: None,
+        })
+        .on_restore(move |env| restore_native(env, &hook_fx))
+}
+
+/// A suite for the restoration-cost defect: streams are created during the
+/// active month, then a single `withdraw_many` after the silence restores all
+/// of them at once. The only invariant is `RestoreCostWithinBudget`.
+pub fn restore_cost_suite(
+    variant: Variant,
+    seed: u64,
+    cases: u32,
+    budget: ResourceBudget,
+) -> Suite {
+    let (env, fx) = setup(variant);
+    let fx = Arc::new(fx);
+    let sender = Actor::from_address("sender", &addr(&env, &fx.sender));
+    let recipient = Actor::from_address("recipient", &addr(&env, &fx.recipient));
+    let hook_fx = fx.clone();
+    Suite::new("ttl-archival-restore-cost", env)
+        .config(SuiteConfig {
+            seed,
+            steps: 31..=34,
+            cases,
+            auth: AuthMode::MockAll,
+            ..SuiteConfig::default()
+        })
+        .ledger_advance(LedgerAdvance::daily_then_silence(30, 90))
+        .handler(CreateStream {
+            fx: fx.clone(),
+            actors: vec![sender],
+        })
+        .handler(WithdrawMany {
+            fx: fx.clone(),
+            actors: vec![recipient],
+        })
+        .invariant(RestoreCostWithinBudget::new(
+            fx.contract.clone(),
+            StreamModel::default(),
+            Arc::new(|env: &Env, id: u64| DataKey::Stream(id).into_val(env)),
+            vec!["withdraw_many".into()],
+            budget,
+        ))
+        .on_restore(move |env| restore_native(env, &hook_fx))
 }

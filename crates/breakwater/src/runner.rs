@@ -104,10 +104,15 @@ impl Runner {
             };
             self.steps_executed.fetch_add(1, Ordering::Relaxed);
 
+            let mut return_value = None;
             let outcome = match catch_unwind(AssertUnwindSafe(|| {
                 handler.call(&env, &ctx, &actor, &step.args)
             })) {
                 Ok(Ok(CallOutcome::Success)) => StepOutcome::Success,
+                Ok(Ok(CallOutcome::SuccessWith(value))) => {
+                    return_value = Some(value);
+                    StepOutcome::Success
+                }
                 Ok(Ok(CallOutcome::ContractError(code))) => StepOutcome::ContractError(code),
                 Ok(Ok(CallOutcome::Unauthorized)) => StepOutcome::Unauthorized,
                 Ok(Err(err)) => StepOutcome::HandlerError(err.to_string()),
@@ -123,6 +128,7 @@ impl Runner {
                 ledger_sequence: env.ledger().sequence(),
                 timestamp: env.ledger().timestamp(),
                 outcome: outcome.clone(),
+                return_value,
             });
 
             let step_failure = match outcome {

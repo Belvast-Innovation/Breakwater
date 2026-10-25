@@ -21,13 +21,31 @@ use crate::config::AuthMode;
 /// panic and treated as a bug.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CallOutcome {
-    /// The call succeeded.
+    /// The call succeeded and returned nothing worth recording.
     Success,
+    /// The call succeeded; the value is the contract's return value in JSON
+    /// form and is recorded in the step log and the exported report.
+    SuccessWith(serde_json::Value),
     /// The contract rejected the call with the given `contracterror` code.
     ContractError(u32),
     /// The host rejected the call's authorization (a policy or signer check
     /// failed). Expected behaviour when fuzzing authorization.
     Unauthorized,
+}
+
+impl CallOutcome {
+    /// A successful outcome carrying `value` as the recorded return value.
+    pub fn returning(value: impl Serialize) -> Self {
+        match serde_json::to_value(value) {
+            Ok(v) => CallOutcome::SuccessWith(v),
+            Err(_) => CallOutcome::Success,
+        }
+    }
+
+    /// True for [`CallOutcome::Success`] and [`CallOutcome::SuccessWith`].
+    pub fn is_success(&self) -> bool {
+        matches!(self, CallOutcome::Success | CallOutcome::SuccessWith(_))
+    }
 }
 
 /// Per-step information a handler may need to build real authorization.

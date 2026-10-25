@@ -233,7 +233,7 @@ impl Handler for AgentTransfer {
         env.set_auths(&entries);
 
         match TokenClient::new(env, &token).try_transfer(&account, &merchant, &amount) {
-            Ok(Ok(())) => Ok(CallOutcome::Success),
+            Ok(Ok(())) => Ok(CallOutcome::returning(())),
             Ok(Err(e)) => Err(HandlerError::Other(format!(
                 "return value conversion failed: {e:?}"
             ))),
@@ -303,7 +303,7 @@ impl Handler for AgentApprove {
         env.set_auths(&entries);
 
         match TokenClient::new(env, &token).try_approve(&account, &merchant, &amount, &expiration) {
-            Ok(Ok(())) => Ok(CallOutcome::Success),
+            Ok(Ok(())) => Ok(CallOutcome::returning(())),
             Ok(Err(e)) => Err(HandlerError::Other(format!(
                 "return value conversion failed: {e:?}"
             ))),
@@ -365,7 +365,7 @@ impl Handler for OwnerRevokeAgent {
         match DemoAccountClient::new(env, &account)
             .try_remove_signer(&self.fx.agent_rule, &self.fx.agent_signer_id)
         {
-            Ok(Ok(())) => Ok(CallOutcome::Success),
+            Ok(Ok(())) => Ok(CallOutcome::returning(())),
             Ok(Err(e)) => Err(HandlerError::Other(format!(
                 "return value conversion failed: {e:?}"
             ))),

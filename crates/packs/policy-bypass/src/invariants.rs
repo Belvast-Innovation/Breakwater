@@ -252,6 +252,7 @@ mod tests {
             ledger_sequence: ledger,
             timestamp: u64::from(ledger) * 5,
             outcome,
+            return_value: None,
         }
     }
 

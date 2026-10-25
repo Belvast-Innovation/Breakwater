@@ -11,6 +11,7 @@ mod common;
 use std::time::Instant;
 
 use breakwater::{Exporter, Outcome, SuiteConfig, ViolationKind, LEDGERS_PER_DAY};
+use breakwater_pack_ttl_archival::ResourceBudget;
 use common::*;
 
 #[test]
@@ -86,6 +87,122 @@ fn same_seed_reproduces_the_same_sequence() {
 #[test]
 fn fixed_contract_survives_the_same_profile() {
     let report = suite(Variant::Fixed, 11, 16).run().expect("suite runs");
+    assert!(
+        matches!(report.outcome, Outcome::Held),
+        "{:?}",
+        report.failure().map(|f| &f.violation)
+    );
+}
+
+/// Restoration budget for the demo, from measuring the buggy contract: a
+/// withdrawal from a live stream reads at most one entry from disk and a
+/// single archived stream costs one entry (384 bytes); the first call after a
+/// quiet quarter restores the instance, the stream and the token balances in
+/// one go (5 entries, 1 516 bytes), and a batch over N archived streams costs N.
+fn demo_budget() -> ResourceBudget {
+    ResourceBudget {
+        max_disk_read_entries: Some(3),
+        max_disk_read_bytes: Some(1_000),
+        ..ResourceBudget::default()
+    }
+}
+
+#[test]
+fn anyone_can_keep_entries_alive_beyond_the_stream() {
+    let report = keep_alive_suite(Variant::Buggy, 5, 32)
+        .run()
+        .expect("suite runs");
+    let failure = report
+        .failure()
+        .expect("the public bump_ttl must overshoot the stream's lifetime");
+    eprintln!("keep-alive shrunk sequence:");
+    for step in failure.log.steps() {
+        eprintln!(
+            "  #{} {:<14} {:<8} +{:>6} ledgers args={} -> {:?}",
+            step.index,
+            step.handler,
+            step.actor.name(),
+            step.gap.ledgers,
+            step.args,
+            step.outcome
+        );
+    }
+    eprintln!(
+        "violation: {} ({})",
+        failure.violation.message, failure.violation.source
+    );
+    assert_eq!(failure.violation.source, "no_unbounded_ttl_extension");
+    assert!(failure.log.steps().iter().any(|s| s.handler == "bump_ttl"));
+    assert!(
+        failure.log.len() <= 3,
+        "shrunk to {} steps",
+        failure.log.len()
+    );
+}
+
+#[test]
+fn guarded_bump_ttl_never_overshoots() {
+    let report = keep_alive_suite(Variant::Fixed, 5, 32)
+        .run()
+        .expect("suite runs");
+    assert!(
+        matches!(report.outcome, Outcome::Held),
+        "{:?}",
+        report.failure().map(|f| &f.violation)
+    );
+}
+
+#[test]
+fn the_first_call_after_a_quiet_quarter_blows_the_restoration_budget() {
+    let report = restore_cost_suite(Variant::Buggy, 3, 16, demo_budget())
+        .run()
+        .expect("suite runs");
+    let failure = report
+        .failure()
+        .expect("restoring everything at once must exceed the budget");
+    eprintln!("restore-cost shrunk sequence:");
+    for step in failure.log.steps() {
+        eprintln!(
+            "  #{} {:<14} {:<10} +{:>8} ledgers args={} -> {:?} value={:?}",
+            step.index,
+            step.handler,
+            step.actor.name(),
+            step.gap.ledgers,
+            step.args,
+            step.outcome,
+            step.return_value
+        );
+    }
+    eprintln!(
+        "violation: {} ({})",
+        failure.violation.message, failure.violation.source
+    );
+    eprintln!(
+        "detail: {}",
+        failure
+            .violation
+            .detail
+            .as_ref()
+            .map(|d| d.to_string())
+            .unwrap_or_default()
+    );
+    assert_eq!(failure.violation.source, "restore_cost_within_budget");
+    let detail = failure.violation.detail.as_ref().expect("detail");
+    assert_eq!(detail["handler"], "withdraw_many");
+    assert!(detail["disk_read_entries"].as_u64().unwrap() > 3);
+    assert_eq!(failure.log.last().unwrap().handler, "withdraw_many");
+    assert!(
+        failure.log.len() <= 4,
+        "shrunk to {} steps",
+        failure.log.len()
+    );
+}
+
+#[test]
+fn the_fixed_contract_never_restores_anything() {
+    let report = restore_cost_suite(Variant::Fixed, 3, 16, demo_budget())
+        .run()
+        .expect("suite runs");
     assert!(
         matches!(report.outcome, Outcome::Held),
         "{:?}",
