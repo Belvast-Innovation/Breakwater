@@ -5,12 +5,23 @@
 //! always hold). Breakwater generates randomized call sequences against an
 //! in-process [`soroban_sdk::Env`], checks every invariant after every step,
 //! shrinks any failing sequence to a minimal reproduction and exports it.
+//!
+//! ```ignore
+//! let report = Suite::new("counter", env)
+//!     .seed(42)
+//!     .steps(1..=30)
+//!     .handler(Increment { contract, actors })
+//!     .invariant(NeverAbove(10))
+//!     .on_restore(move |env| { env.register_at(&Address::from_str(env, &id), Counter, ()); })
+//!     .run()?;
+//! ```
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 mod actor;
 mod config;
 mod error;
+mod export;
 mod handler;
 mod invariant;
 mod ledger;
@@ -22,6 +33,7 @@ mod suite;
 pub use actor::Actor;
 pub use config::{AuthMode, SuiteConfig};
 pub use error::SuiteError;
+pub use export::Exporter;
 pub use handler::{CallOutcome, Handler, HandlerError, StepArgs};
 pub use invariant::{Invariant, Violation, ViolationKind};
 pub use ledger::LedgerAdvance;
