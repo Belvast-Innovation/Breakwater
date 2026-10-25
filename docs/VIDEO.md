@@ -11,7 +11,7 @@ The narration format below is parsed by `scripts/video/assemble.sh`: each segmen
 - Picture: deck cover (page 1 of `docs/deck/breakwater-pitch.pdf`), then fade.
 - Source: `scripts/video/stills.py` (PDF page 1)
 
-Narration: Soroban already has static analysis, AI review and formal verification. What it doesn't have is a reusable stateful fuzzer. And Stellar has two risks that only show up across many transactions: smart-account policies for agent wallets, and state that expires under TTL archival. Breakwater is that missing layer.
+Narration: Soroban already has static analysis, AI review and formal verification. What it doesn't have is a reusable stateful fuzzer. That gap matters now: AI agents pay on Stellar through x402 and MPP, guarded only by smart-account policies, and contract state expires under TTL archival. Both break across many transactions, not one. Breakwater is that missing layer.
 
 ## 02 · A suite is just Rust
 
@@ -32,7 +32,7 @@ Narration: First demo: an OpenZeppelin smart account with an agent key. The agen
 - Picture: deck slide 5, Findings (page 5 of the PDF).
 - Source: `scripts/video/stills.py` (PDF page 5)
 
-Narration: To be clear: the policy code is correct, and this is not an OpenZeppelin bug. The configuration is wrong. The daily window was set to 1,728 ledgers instead of 17,280. Every single payment passes. The sequence doesn't: 147 USDC in a day, against a cap of 100.
+Narration: To be clear: the policy code is correct, and this is not an OpenZeppelin bug. The configuration is wrong: the daily window was set to 1,728 ledgers instead of 17,280. The third payment lands exactly one window after the first, so the policy has already forgotten it. Every single payment passes, yet the sequence spends 147 USDC in a day against a cap of 100. Over a full day, that is up to ten times the limit.
 
 ## 05 · The report
 
@@ -53,28 +53,46 @@ Narration: Breakwater export writes the shrunk sequence as a Rust test. It repla
 - Picture: terminal, `breakwater run examples/ttl-archival --seed 11`, then `docs/reports/ttl-archival-seed-11.html` scrolling to the TTL chart.
 - Source: `scripts/video/ttl-archival.tape`, then `scripts/video/record-browser.mjs` (`report-ttl-archival`)
 
-Narration: Second pack: state archival. A payment stream that never extends its TTL. Under daily use and then a quiet quarter, Breakwater shrinks it to two calls and reports: stream 0 is archived with 275 days left to run. Two related invariants: an unauthenticated bump keeps a stream alive 1.3 days past its end, and one call after the quiet period restores 5 entries against a budget the suite sets at 3.
+Narration: Second pack: state archival. A payment stream that never extends its TTL. Under a month of daily use and then a quiet quarter, Breakwater shrinks the failure to two calls: stream 0 is archived with 275 days left to run. On Stellar the data isn't lost, but the next transaction that touches it has to restore it and pay for that, and one built without the restore fails. Two more invariants fire: an unauthenticated bump keeps a stream alive 1.3 days past its end, and one call after the quiet period restores 5 entries against a budget the suite sets at 3. The fixed contract passes all three.
 
 ## 08 · On Testnet
 
 - Picture: stellar.expert page of the third replayed payment.
 - Source: `scripts/video/record-browser.mjs` (`stellar-expert`), https://stellar.expert/explorer/testnet/tx/3f30f306985585ff62b31271f7aa050a26ec82f6458925d17aa5c32ce157aa8e
 
-Narration: Then I replayed the shrunk bypass on Stellar Testnet, through the real OpenZeppelin account, signed by the agent's key. Three payments, 147 USDC, in 3,537 ledgers, about 4.9 hours. The policies accepted every one.
+Narration: Then I replayed the shrunk bypass on Stellar Testnet, through the real OpenZeppelin account, signed by the agent's key. Three payments, 147 USDC, in 3,537 ledgers, about 4.9 hours. The policies accepted every one: a real bypass on a real network.
 
 ## 09 · Built this weekend
 
 - Picture: GitHub repository home page, slow scroll through the README, with a caption card showing the commit, pull request and test counts. The counts are not spoken; `scripts/video/stills.py` reads them from the facts table in `docs/PITCH_DECK.md`, so updating that table updates the video.
 - Source: `scripts/video/record-browser.mjs` (`github`), https://github.com/Belvast-Innovation/Breakwater
 
-Narration: All of this was built during the event, every change through a pull request with CI. Next: a rule-rotation probe, a restoration-cost CI gate and XDR replay export, then crates.io and a GitHub Action.
+Narration: All of this was built during the event, every change through a pull request with CI. Breakwater is a library and a CLI that any Soroban team or auditor can add to cargo test. Next: a rule-rotation probe, a restoration-cost CI gate and XDR replay export, then crates.io, a GitHub Action, and a Stellar Community Fund application.
 
 ## 10 · Where to find it
 
-- Picture: deck slide 7, The Team, with the repository QR code (page 7 of the PDF).
+- Picture: deck slide 7, The Team, with the repository QR code (page 7 of the PDF), and a small caption in the top right: "Narration: ElevenLabs voice clone of the author's own voice."
 - Source: `scripts/video/stills.py` (PDF page 7)
 
 Narration: I'm Hannes Gao, Belvast Innovation. Breakwater is open source under Apache 2.0, and the repository is on screen. Thanks for watching.
+
+## Pronunciation (text-to-speech only)
+
+The narration above is written for reading and for the subtitles. When it is voiced with text-to-speech, apply these substitutions to the spoken text only; the subtitles keep the written form.
+
+| Written | Spoken |
+| --- | --- |
+| 49, 49, 49 | forty-nine, forty-nine, forty-nine |
+| 4.9 hours | four point nine hours |
+| 1.3 days | one point three days |
+| Apache 2.0 | Apache two point oh |
+| USDC (every occurrence) | U S D C |
+| MPP | M P P |
+| CI | C I |
+| XDR | X D R |
+| crates.io | crates dot io |
+| x402 | x four oh two |
+| ten times | ten times (unchanged) |
 
 ## Producing the video
 

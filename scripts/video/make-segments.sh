@@ -41,7 +41,10 @@ still() { # png seconds out
 still "$STILLS/deck-1.png" 8 "$SEG/seg01.mp4"
 still "$STILLS/deck-5.png" 12 "$SEG/seg04.mp4"
 still "$STILLS/code-repro.png" 10 "$SEG/seg06.mp4"
-still "$STILLS/deck-7.png" 10 "$SEG/seg10.mp4"
+still "$STILLS/deck-7.png" 10 "$RAW/seg10-plain.mp4"
+# Segment 10: the team slide with the narration credit in the top right, below the header bar.
+enc -i "$RAW/seg10-plain.mp4" -i "$STILLS/voice-caption.png" \
+  -filter_complex "[0:v][1:v]overlay=W-w-60:96" "${VOPTS[@]}" "$SEG/seg10.mp4"
 
 # Segment 02: slow vertical pan over the tall code image, 2 s hold at each end.
 H=$("$PYTHON" -c 'import sys; from PIL import Image; print(Image.open(sys.argv[1]).height)' "$STILLS/code-suite.png")

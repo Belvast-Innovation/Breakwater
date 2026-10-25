@@ -126,8 +126,30 @@ def stats_card():
     return lines
 
 
+def voice_caption():
+    """Small caption for the closing segment: how the narration was produced."""
+    from PIL import ImageDraw, ImageFont
+
+    text = "Narration: ElevenLabs voice clone of the author's own voice."
+    font = None
+    for path in (os.path.expanduser("~/Library/Fonts/InterTight[wght].ttf"),
+                 "/System/Library/Fonts/Supplemental/Arial.ttf", "/System/Library/Fonts/Helvetica.ttc"):
+        try:
+            font = ImageFont.truetype(path, 26)
+            break
+        except OSError:
+            continue
+    font = font or ImageFont.load_default()
+    left, top, right, bottom = ImageDraw.Draw(Image.new("RGB", (1, 1))).textbbox((0, 0), text, font=font)
+    card = Image.new("RGBA", (right - left + 40, bottom - top + 24), (15, 15, 15, 200))
+    ImageDraw.Draw(card).text((20 - left, 12 - top), text, font=font, fill=(255, 255, 255, 255))
+    card.save(os.path.join(OUT, "voice-caption.png"))
+    return text
+
+
 if __name__ == "__main__":
     print("stats-card.png", stats_card())
+    print("voice-caption.png", voice_caption())
     deck_pages()
     print("code-suite.png", frame(code_image(readme_suite(), 30), "code-suite.png", tall=True))
     print("code-repro.png", frame(code_image(repro_head(), 30), "code-repro.png"))
