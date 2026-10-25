@@ -6,8 +6,8 @@
 
 use breakwater::proptest::prelude::*;
 use breakwater::{
-    Actor, CallOutcome, Exporter, Handler, HandlerError, Invariant, Outcome, Suite, TxLog,
-    Violation, ViolationKind,
+    Actor, CallContext, CallOutcome, Exporter, Handler, HandlerError, Invariant, Outcome, Suite,
+    TxLog, Violation, ViolationKind,
 };
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Symbol};
 
@@ -50,7 +50,13 @@ impl Handler for Increment {
         Just(()).boxed()
     }
 
-    fn call(&self, env: &Env, _actor: &Actor, _args: &()) -> Result<CallOutcome, HandlerError> {
+    fn call(
+        &self,
+        env: &Env,
+        _ctx: &CallContext,
+        _actor: &Actor,
+        _args: &(),
+    ) -> Result<CallOutcome, HandlerError> {
         let id = Address::from_str(env, &self.contract);
         match CounterClient::new(env, &id).try_increment() {
             Ok(Ok(_)) => Ok(CallOutcome::Success),
