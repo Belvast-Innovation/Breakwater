@@ -13,6 +13,7 @@ use crate::handler::{DynHandler, Handler};
 use crate::invariant::{Invariant, Violation};
 use crate::ledger::LedgerAdvance;
 use crate::log::TxLog;
+use crate::replay::{ReplayError, ReplayStep};
 use crate::runner::{RestoreHook, Runner};
 use crate::step::{sequence_strategy, Step};
 
@@ -178,6 +179,77 @@ impl Suite {
         })
     }
 
+    /// Executes exactly `steps` once, from a fresh restore of the suite's
+    /// `Env`, checking every invariant after every step. No generation, no
+    /// shrinking: this is how an exported reproduction is replayed.
+    pub fn replay(self, steps: &[ReplayStep]) -> Result<RunReport, SuiteError> {
+        self.validate()?;
+        let Suite {
+            name,
+            env,
+            config,
+            advance: _,
+            handlers,
+            invariants,
+            restore_hooks,
+        } = self;
+        let handlers: Arc<[Box<dyn DynHandler>]> = handlers.into();
+        let invariants: Arc<[Box<dyn Invariant>]> = invariants.into();
+        let restore_hooks: Arc<[RestoreHook]> = restore_hooks.into();
+
+        let mut resolved = Vec::with_capacity(steps.len());
+        for (index, step) in steps.iter().enumerate() {
+            let handler = handlers
+                .iter()
+                .position(|h| h.name() == step.handler)
+                .ok_or_else(|| ReplayError::UnknownHandler {
+                    step: index,
+                    handler: step.handler.clone(),
+                })?;
+            let actor = handlers[handler]
+                .actors()
+                .iter()
+                .position(|a| a.name() == step.actor)
+                .ok_or_else(|| ReplayError::UnknownActor {
+                    step: index,
+                    handler: step.handler.clone(),
+                    actor: step.actor.clone(),
+                })?;
+            let args = handlers[handler]
+                .args_from_json(&step.args)
+                .ok_or_else(|| ReplayError::BadArgs {
+                    step: index,
+                    handler: step.handler.clone(),
+                    args: step.args.clone(),
+                })?;
+            resolved.push(Step {
+                handler,
+                actor,
+                args,
+                gap: step.gap,
+            });
+        }
+
+        let runner = Runner::new(env, handlers, invariants, restore_hooks, config.clone());
+        let execution = runner.execute(&resolved, None);
+        let outcome = match execution.failure {
+            None => Outcome::Held,
+            Some((failing_step, violation)) => Outcome::Violated(Failure {
+                violation,
+                failing_step,
+                log: execution.log,
+                steps: resolved,
+            }),
+        };
+        Ok(RunReport {
+            suite: name,
+            seed: config.seed,
+            cases_run: 1,
+            steps_run: runner.steps_executed(),
+            outcome,
+        })
+    }
+
     fn validate(&self) -> Result<(), SuiteError> {
         if self.handlers.is_empty() {
             return Err(SuiteError::NoHandlers(self.name.clone()));
@@ -239,6 +311,11 @@ impl RunReport {
             Outcome::Held => None,
             Outcome::Violated(f) => Some(f),
         }
+    }
+
+    /// The shrunk sequence as replayable steps, if the run found a failure.
+    pub fn replay_steps(&self) -> Option<Vec<ReplayStep>> {
+        self.failure().map(|f| ReplayStep::from_log(&f.log))
     }
 }
 

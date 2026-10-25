@@ -27,18 +27,20 @@ mod handler;
 mod invariant;
 mod ledger;
 mod log;
+mod replay;
 mod runner;
 mod step;
 mod suite;
 
 pub use actor::Actor;
-pub use config::{AuthMode, SuiteConfig};
+pub use config::{parse_steps, AuthMode, SuiteConfig};
 pub use error::SuiteError;
 pub use export::Exporter;
 pub use handler::{CallContext, CallOutcome, Handler, HandlerError, StepArgs};
 pub use invariant::{Invariant, Violation, ViolationKind};
 pub use ledger::{LedgerAdvance, LEDGERS_PER_DAY, SECONDS_PER_LEDGER};
 pub use log::{Gap, StepOutcome, StepRecord, TxLog};
+pub use replay::{ReplayError, ReplayStep};
 pub use step::Step;
 pub use suite::{Failure, Outcome, RunReport, Suite};
 

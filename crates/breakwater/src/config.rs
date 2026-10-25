@@ -36,6 +36,49 @@ pub struct SuiteConfig {
     pub unlimited_budget: bool,
 }
 
+impl SuiteConfig {
+    /// Overrides `default` with the environment the CLI sets:
+    /// `BREAKWATER_SEED` (u64), `BREAKWATER_STEPS` (`A..=B`) and
+    /// `BREAKWATER_AUTH` (`mock` | `real`). Unset or malformed variables leave
+    /// the default in place, so suites behave normally under plain `cargo test`.
+    pub fn from_env(default: SuiteConfig) -> SuiteConfig {
+        let mut config = default;
+        if let Some(seed) = std::env::var("BREAKWATER_SEED")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+        {
+            config.seed = seed;
+        }
+        if let Some(steps) = std::env::var("BREAKWATER_STEPS")
+            .ok()
+            .and_then(|v| parse_steps(&v))
+        {
+            config.steps = steps;
+        }
+        if let Ok(auth) = std::env::var("BREAKWATER_AUTH") {
+            match auth.trim() {
+                "mock" => config.auth = AuthMode::MockAll,
+                "real" => config.auth = AuthMode::Real,
+                _ => {}
+            }
+        }
+        config
+    }
+}
+
+/// Parses `A..=B` (or a single `N`, meaning `N..=N`).
+pub fn parse_steps(text: &str) -> Option<RangeInclusive<usize>> {
+    let text = text.trim();
+    if let Some((a, b)) = text.split_once("..=") {
+        let a: usize = a.trim().parse().ok()?;
+        let b: usize = b.trim().parse().ok()?;
+        (a <= b && a > 0).then_some(a..=b)
+    } else {
+        let n: usize = text.parse().ok()?;
+        (n > 0).then_some(n..=n)
+    }
+}
+
 impl Default for SuiteConfig {
     fn default() -> Self {
         Self {
@@ -46,5 +89,19 @@ impl Default for SuiteConfig {
             max_shrink_iters: 2048,
             unlimited_budget: true,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_step_ranges() {
+        assert_eq!(parse_steps("1..=20"), Some(1..=20));
+        assert_eq!(parse_steps(" 5 "), Some(5..=5));
+        assert_eq!(parse_steps("0..=3"), None);
+        assert_eq!(parse_steps("4..=2"), None);
+        assert_eq!(parse_steps("abc"), None);
     }
 }

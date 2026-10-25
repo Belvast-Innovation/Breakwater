@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use proptest::prelude::*;
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 use soroban_sdk::Env;
 use thiserror::Error;
@@ -74,7 +75,7 @@ pub enum HandlerError {
 /// [`CallOutcome::ContractError`] instead of panics.
 pub trait Handler: Send + Sync + 'static {
     /// Generated arguments for one call.
-    type Args: Clone + Debug + Serialize + Send + Sync + 'static;
+    type Args: Clone + Debug + Serialize + DeserializeOwned + Send + Sync + 'static;
 
     /// Name used in logs and exports; usually the contract function name.
     fn name(&self) -> &'static str;
@@ -84,6 +85,12 @@ pub trait Handler: Send + Sync + 'static {
 
     /// proptest strategy for the arguments.
     fn strategy(&self) -> BoxedStrategy<Self::Args>;
+
+    /// Rebuilds arguments from their logged JSON form, for replaying an
+    /// exported sequence. The default uses `serde_json`.
+    fn args_from_json(&self, value: &serde_json::Value) -> Option<Self::Args> {
+        serde_json::from_value(value.clone()).ok()
+    }
 
     /// Performs the call as `actor` with `args`.
     ///
@@ -144,6 +151,7 @@ pub(crate) trait DynHandler: Send + Sync {
     fn name(&self) -> &'static str;
     fn actors(&self) -> &[Actor];
     fn strategy(&self) -> BoxedStrategy<StepArgs>;
+    fn args_from_json(&self, value: &serde_json::Value) -> Option<StepArgs>;
     fn call(
         &self,
         env: &Env,
@@ -166,6 +174,10 @@ impl<H: Handler> DynHandler for H {
         Handler::strategy(self)
             .prop_map(|args| StepArgs(Arc::new(args)))
             .boxed()
+    }
+
+    fn args_from_json(&self, value: &serde_json::Value) -> Option<StepArgs> {
+        Handler::args_from_json(self, value).map(|args| StepArgs(Arc::new(args)))
     }
 
     fn call(
