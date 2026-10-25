@@ -21,7 +21,7 @@ Do not install or add anything not listed here without asking.
 
 | Component | Version / source | Notes |
 | --- | --- | --- |
-| Rust | stable, 1.85 or newer (`rust-toolchain.toml`) | `wasm32v1-none` target required for contracts |
+| Rust | stable, 1.91 or newer (`rust-toolchain.toml`; `rust-version = "1.91"` in `Cargo.toml`, required by `soroban-sdk` 28.0.0) | `wasm32v1-none` target required for contracts |
 | Stellar CLI | 28.1.0 (`brew install stellar-cli` or `cargo install --locked stellar-cli`) | used for Testnet deploys and `stellar contract build`; CI uses `stellar/stellar-cli@v28.1.0` |
 | `soroban-sdk` | `=28.0.0` (Protocol 28), `testutils` feature | the only contract SDK in use |
 | `proptest`, `proptest-state-machine` | `=1.12.0`, `=0.9.0` | sequence generation and shrinking |
@@ -171,10 +171,11 @@ Done on Sunday 25 October: workspace and CI, core runner with shrinking and JSON
 
 | When | What |
 | --- | --- |
-| Mon 09:15 – 10:30 | Final README read-through against real `breakwater run` output |
-| Mon 10:30 – 11:00 | Demo video (2–4 min, YouTube), two takes, fixed seeds 7 and 11 |
-| Mon 11:00 – 11:20 | Pitch deck to PDF (≤ 20 MiB) following `docs/SUBMISSION.md` |
-| Mon 11:20 – 11:40 | Final `main` merge, CI green, `git log` sanity check |
+| Mon morning | Record the narration and assemble the demo video (`docs/VIDEO.md`, `scripts/video/`) |
+| Mon morning | Upload the video (YouTube or Vimeo, public) and add its link to `README.md` and `docs/SUBMISSION.md` |
+| Mon morning | Upload `docs/deck/breakwater-pitch.pdf` to the submission portal |
+| Mon 11:00 | Final sync of the counts (commits, merged PRs, tests) in `docs/PITCH_DECK.md`, the deck and the video caption |
+| Mon 11:20 | Final `main` merge, CI green, tag the submitted commit |
 | Mon 11:40 | Submit. Buffer until 12:00. Do not start anything new after 11:00. |
 
-Stretch goals (`budget-snapshot` pack, `soroban-fork` integration) are roadmap items, not submission work.
+Further work is listed in the README's [Roadmap](README.md#roadmap); none of it is submission work.
