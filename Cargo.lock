@@ -372,6 +372,7 @@ dependencies = [
  "serde_json",
  "soroban-sdk",
  "stellar-accounts",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
