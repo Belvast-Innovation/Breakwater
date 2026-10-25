@@ -10,7 +10,8 @@
 //! - [`StreamModel`]: derives the set of live streams from the `TxLog`, so
 //!   invariants never have to read contract state.
 //! - Invariants: [`NoMidLifecycleExpiry`], [`InstanceAlive`],
-//!   [`RestoreRestoresFunction`].
+//!   [`RestoreRestoresFunction`], [`NoUnboundedTtlExtension`],
+//!   [`RestoreCostWithinBudget`].
 //! - The usage profile that makes the pack bite lives in the core:
 //!   `LedgerAdvance::daily_then_silence`.
 //!
@@ -23,7 +24,7 @@ mod streams;
 pub mod ttl;
 
 pub use invariants::{
-    InstanceAlive, NoMidLifecycleExpiry, RestoreHook, RestoreRestoresFunction, StreamKey,
-    StreamProbe,
+    InstanceAlive, NoMidLifecycleExpiry, NoUnboundedTtlExtension, ResourceBudget,
+    RestoreCostWithinBudget, RestoreHook, RestoreRestoresFunction, StreamKey, StreamProbe,
 };
 pub use streams::{LiveStream, StreamModel};
