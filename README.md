@@ -222,7 +222,7 @@ Stellar documentation was pulled into the AI context through the official **Rave
 ## Roadmap
 
 - Attack pack for resource-budget regression (`forge snapshot`-style CI gate)
-- `soroban-fork` integration to fuzz against live mainnet state
+- `soroban-fork` integration to fuzz against live mainnet state (blocked until `soroban-fork` supports `soroban-sdk` 28; it currently targets 25.x)
 - Macro-based suite declaration (`#[breakwater::suite]`)
 - Publish to crates.io; apply to the Stellar Community Fund (Build / Public Goods)
 

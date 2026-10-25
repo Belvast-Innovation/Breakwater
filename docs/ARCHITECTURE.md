@@ -159,6 +159,13 @@ Exit codes: `0` all invariants held, `1` violation found (reproduction exported)
 
 ## 8. Open questions to resolve during the event
 
+**Decided**
+
+- How the CLI drives a suite: `breakwater run <suite-dir>` executes `cargo test --test suite` in the target directory, passes the seed and step range through environment variables, and parses the JSON the suite prints. No separate `suite` binary per example. Implementation lands in the `feat(cli)` PR.
+- `soroban-fork` is not a dependency for the hackathon build: it currently supports `soroban-sdk` 25.x only and the workspace is pinned to 28.0.0. Mainnet-state fuzzing stays a roadmap item.
+
+**Open**
+
 - Whether `proptest-state-machine` preconditions are expressive enough for the policy generators, or whether a custom `Strategy` is needed.
 - Cost of `Real` auth per step; if too slow, run `MockAll` for generation and re-verify only the shrunk sequence under `Real`.
 - Whether to export reproductions as `#[test]` functions or as a JSON step list plus a generic replay test (JSON is simpler to generate; Rust is nicer to read in a PR).

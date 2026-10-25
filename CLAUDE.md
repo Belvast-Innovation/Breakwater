@@ -27,7 +27,7 @@ Do not install or add anything not listed here without asking.
 | `proptest`, `proptest-state-machine` | latest | sequence generation and shrinking |
 | OpenZeppelin `stellar-contracts` (`stellar-accounts` et al.) | pinned in `Cargo.toml` | demo target for `policy-bypass` only |
 | `clap`, `serde`, `serde_json`, `anyhow`, `thiserror` | latest | CLI and reporting |
-| `soroban-fork` | optional, behind `fork` feature | only if time allows |
+| `soroban-fork` | not a dependency yet | supports `soroban-sdk` 25.x only; revisit once it supports SDK 28 |
 | Raven MCP | `https://raven.stellar.org/mcp` | **Use it** for any Stellar / Soroban API question before guessing. Configured in `.mcp.json`. |
 | Stellar Dev Skill | Claude Code plugin | loaded; prefer it for SDK idioms |
 
@@ -95,20 +95,41 @@ These are hard rules from the organisers. Violating them is disqualification.
 
 Apply on GitHub via the CLI after the first push. Breakwater is a public repo, so rulesets are available on the free plan.
 
+The ruleset is kept as JSON in `.github/ruleset-main.json` and sent with `gh api --input`. The `gh api -F 'rules[][...]'` flag syntax cannot nest `parameters` under the right array element and is rejected with HTTP 422, so do not use it.
+
 ```bash
 # requires: gh auth login, repo already pushed
 gh api -X POST repos/Belvast-Innovation/Breakwater/rulesets \
-  -f name='protect-main' -f target=branch -f enforcement=active \
-  -F 'conditions[ref_name][include][]=refs/heads/main' \
-  -F 'rules[][type]=deletion' \
-  -F 'rules[][type]=non_fast_forward' \
-  -F 'rules[][type]=required_linear_history' \
-  -F 'rules[][type]=pull_request' \
-  -F 'rules[][parameters][required_approving_review_count]=0' \
-  -F 'rules[][parameters][dismiss_stale_reviews_on_push]=true' \
-  -F 'rules[][type]=required_status_checks' \
-  -F 'rules[][parameters][strict_required_status_checks_policy]=true' \
-  -F 'rules[][parameters][required_status_checks][][context]=ci'
+  --input .github/ruleset-main.json
+```
+
+Contents of `.github/ruleset-main.json`:
+
+```json
+{
+  "name": "protect-main",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    { "type": "required_linear_history" },
+    { "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false
+      } },
+    { "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "required_status_checks": [ { "context": "ci" } ]
+      } }
+  ]
+}
 ```
 
 What this enforces on `main`:
