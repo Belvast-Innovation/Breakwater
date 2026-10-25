@@ -211,13 +211,19 @@ Breakwater is infrastructure, so "use of Stellar" means use of the protocol itse
 
 ## Testnet evidence
 
-Replaying a shrunk failing sequence on Testnet is part of the demo. Contract IDs and transaction hashes are filled in at submission time:
+Replaying a shrunk failing sequence on Testnet is part of the demo (`scripts/replay-testnet.sh`, see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md#8-replaying-on-testnet)). Local fuzzing stays local; only the exported reproduction goes on-chain. Contract IDs and transaction hashes are filled in at submission time:
 
 | Item | Value |
 | --- | --- |
 | Demo smart-account contract (policy-bypass) | `C...` |
+| Spending-limit policies (per-call, "daily") | `C...`, `C...` |
+| Replayed bypass: payment 1 (49 USDC) | `https://stellar.expert/explorer/testnet/tx/...` |
+| Replayed bypass: payment 2 (49 USDC) | `https://stellar.expert/explorer/testnet/tx/...` |
+| Replayed bypass: payment 3 (49 USDC, one window later) | `https://stellar.expert/explorer/testnet/tx/...` |
 | Demo payment-stream contract (ttl-archival) | `C...` |
-| Replayed bypass sequence | `https://stellar.expert/explorer/testnet/tx/...` |
+| `create_stream` (365 days) / `withdraw` | `https://stellar.expert/explorer/testnet/tx/...` |
+
+The stream's expiry itself cannot be waited for on Testnet: the entry lives for the network's minimum persistent TTL, which is weeks. What the on-chain evidence shows is the stream being created and used; what the local suite shows is the entry being archived with most of the stream still to run. On a real network the consequence is not a failing call but a cost: every later transaction that touches the stream must carry a restore footprint and pay restoration fees, and a transaction built without one fails.
 
 ## Project layout
 

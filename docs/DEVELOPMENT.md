@@ -157,7 +157,37 @@ Before every push:
 git log -1 --format='%an <%ae>%n%B'   # author is you; no AI attribution trailers
 ```
 
-## 8. Troubleshooting
+## 8. Replaying on Testnet
+
+`scripts/replay-testnet.sh` replays a shrunk `policy-bypass` sequence as real transactions through the smart account's `__check_auth`. Local fuzzing stays local; only the exported reproduction goes on-chain.
+
+Prerequisites: funded identities in the Stellar CLI keystore (`stellar keys generate <name> --network testnet --fund`), `jq`, and the three helper contracts (owner key account, spending-limit policy, Ed25519 verifier) built as separate wasm files, passed as `OWNER_WASM`, `POLICY_WASM`, `VERIFIER_WASM`. Identities used by default:
+
+| Identity | Role |
+| --- | --- |
+| `breakwater-dev` | pays fees, issues the test `USDC` asset, deploys the contracts |
+| `breakwater-recipient` | merchant receiving the payments (holds a `USDC` trustline) |
+| `breakwater-agent` | Ed25519 key behind the agent's `Signer::External` |
+| `breakwater-owner` | Ed25519 key behind the owner's `Signer::Delegated` account |
+
+```bash
+# setup (deploy, configure, mint) and the first two payments
+scripts/replay-testnet.sh breakwater-out/policy-bypass.json --until-step 1
+
+# one policy window later: the third payment
+scripts/replay-testnet.sh breakwater-out/policy-bypass.json --resume-from 2
+
+# print every command instead of running it
+scripts/replay-testnet.sh breakwater-out/policy-bypass.json --dry-run
+```
+
+State (contract ids, completed steps, ledger of the last step) lives in `breakwater-out/replay-<network>.json`. A step with a ledger gap prints the current ledger, the target ledger and the estimated wait.
+
+How an agent payment is submitted: `stellar contract invoke --build-only` simulates `usdc.transfer(account, merchant, amount)` and records an authorization entry for the smart account; the script reads that entry's nonce, expiration ledger and root invocation, has `oz-auth-entry` (a binary in the `policy-bypass` pack) sign the OpenZeppelin `AuthPayload` for it with the agent key, splices the signed entry back into the envelope (`stellar tx decode` / `stellar xdr encode` / `stellar tx encode`), signs with the source key and sends. Signer seeds reach the helper only through the environment, read by `stellar keys secret`; nothing secret is printed or written.
+
+Two things the on-chain path needs that the local demo does not, both deliberately left out of the test suite: `DemoAccount` needs a constructor that installs the initial context rules (an account with zero rules can never authorize `add_context_rule` on itself), and the helper contracts need their own crates, because one cdylib cannot export two `__check_auth` functions.
+
+## 9. Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
