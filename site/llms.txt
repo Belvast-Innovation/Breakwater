@@ -1,0 +1,29 @@
+# Breakwater
+
+> Breakwater is a Rust framework and CLI for stateful property testing of Stellar smart contracts (Foundry-style invariant fuzzing for Soroban). You declare actors (who can call), handlers (what they can call) and invariants (what must always hold); Breakwater generates randomized multi-step transaction sequences against a local Soroban `Env`, checks every invariant after every step, shrinks any failing sequence to its minimal form, and exports it as a reproducible Rust unit test.
+
+It ships with two attack packs for risks that are specific to Stellar: `policy-bypass` (multi-step sequences that slip past OpenZeppelin smart-account policies such as spending limits) and `ttl-archival` (contract state that expires under Soroban's TTL-based state archival while the business logic still depends on it). Built for HackMeridian 2026 in Lisbon by Belvast Innovation; licensed under Apache-2.0. Requires Rust 1.91 or newer, `soroban-sdk` 28.0.0 (Protocol 28).
+
+## Docs
+
+- [Introduction](https://breakwater.belvast.de/docs/): what Breakwater is, the problem it addresses and how it works
+- [Getting started](https://breakwater.belvast.de/docs/getting-started.html): quick start, toolchain setup and day-to-day commands
+- [Writing a suite](https://breakwater.belvast.de/docs/writing-a-suite.html): a complete suite with one handler and one invariant
+- [Attack packs](https://breakwater.belvast.de/docs/attack-packs.html): the `policy-bypass` and `ttl-archival` invariants and demos
+- [Architecture](https://breakwater.belvast.de/docs/architecture.html): core concepts, execution pipeline, authorization model
+- [CLI](https://breakwater.belvast.de/docs/cli.html): `breakwater run | export | report`, exit codes and the JSON report
+- [Testnet evidence](https://breakwater.belvast.de/docs/testnet-evidence.html): deployed contracts and the replayed policy bypass on Stellar Testnet
+- [Roadmap](https://breakwater.belvast.de/docs/roadmap.html): near-term and later work
+
+## Project
+
+- [Website](https://breakwater.belvast.de/): overview, demo video, findings and quick start
+- [Source code](https://github.com/Belvast-Innovation/Breakwater): GitHub repository
+- [README](https://github.com/Belvast-Innovation/Breakwater/blob/main/README.md): full project description
+
+## Optional
+
+- [Demo video](https://vimeo.com/1239334137): 3:43 walkthrough of both demos
+- [Pitch deck](https://github.com/Belvast-Innovation/Breakwater/blob/main/docs/deck/breakwater-pitch.pdf): HackMeridian 2026 pitch deck (PDF)
+- [Policy-bypass report](https://breakwater.belvast.de/reports/policy-bypass-seed-7.html): HTML report of the seed-7 run
+- [TTL-archival report](https://breakwater.belvast.de/reports/ttl-archival-seed-11.html): HTML report of the seed-11 run

@@ -60,3 +60,6 @@ node_modules/
 # ---- Pitch deck working files (the template is not committed) ----
 docs/deck/template.pptx
 docs/deck/unpacked/
+
+# ---- Website build output (site/build.sh) ----
+/_site/

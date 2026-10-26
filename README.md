@@ -31,6 +31,7 @@
 
 </div>
 
+<!-- ANCHOR: intro -->
 Breakwater is a Rust framework and CLI for stateful property testing of Stellar smart contracts. You declare *actors* (who can call), *handlers* (what they can call) and *invariants* (what must always hold). Breakwater generates randomized multi-step transaction sequences against a local Soroban `Env`, checks every invariant after every step, shrinks any failing sequence to its minimal form, and exports it as a reproducible Rust unit test.
 
 It ships with two **attack packs** for risks that are specific to Stellar:
@@ -42,7 +43,8 @@ It ships with two **attack packs** for risks that are specific to Stellar:
 
 > **Status:** HackMeridian 2026 submission (Genesis path · Stellar Unlocked track). Built 25–26 October 2026 in Lisbon. See [Prior work and hackathon scope](#prior-work-and-hackathon-scope).
 >
-> **Submission materials:** pitch deck [`docs/deck/breakwater-pitch.pdf`](docs/deck/breakwater-pitch.pdf) · demo video [https://vimeo.com/1239334137](https://vimeo.com/1239334137) (3:43).
+> **Submission materials:** website [https://breakwater.belvast.de](https://breakwater.belvast.de) · pitch deck [`docs/deck/breakwater-pitch.pdf`](docs/deck/breakwater-pitch.pdf) · demo video [https://vimeo.com/1239334137](https://vimeo.com/1239334137) (3:43).
+<!-- ANCHOR_END: intro -->
 
 ---
 
@@ -64,6 +66,7 @@ It ships with two **attack packs** for risks that are specific to Stellar:
 
 ---
 
+<!-- ANCHOR: overview -->
 ## Problem
 
 Soroban already has good tools for three layers of contract security:
@@ -101,7 +104,9 @@ flowchart TD
 4. **Shrink and export.** A failing sequence is shrunk to the shortest reproduction and written out as a self-contained `#[test]` you can drop into your crate.
 
 A full architecture description is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+<!-- ANCHOR_END: overview -->
 
+<!-- ANCHOR: quick-start -->
 ## Quick start
 
 Prerequisites are listed in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). In short: Rust stable with the `wasm32v1-none` target, the Stellar CLI, and a working `cargo test` on a Soroban contract.
@@ -153,8 +158,10 @@ reproduce with --seed 11; report: <temp dir>/breakwater-ttl-archival-11.json
 The report is written to `std::env::temp_dir()` (`$TMPDIR` or `/tmp` on Unix) as `breakwater-<suite>-<seed>.json` unless `--json <file>` names a path.
 
 Exit codes: `0` all invariants held, `1` a violation was found, `2` usage or configuration error. Colours are off when stdout is not a terminal, when `NO_COLOR` is set, or with `--no-color`.
+<!-- ANCHOR_END: quick-start -->
 
 ## Writing a test
+<!-- ANCHOR: writing-a-test -->
 
 The suite below is `crates/breakwater/tests/counter.rs`, compiled and run by `cargo test`: a counter contract, one handler, one invariant. The framework finds the eleventh increment and shrinks the sequence to eleven steps.
 
@@ -239,8 +246,10 @@ fn finds_the_eleventh_increment_and_shrinks_to_eleven_steps() {
 ```
 
 A suite is an ordinary `cargo test`; the `breakwater` CLI drives the test named `breakwater_suite` in `tests/suite.rs`, passing seed, step range and auth mode through `BREAKWATER_SEED`, `BREAKWATER_STEPS` and `BREAKWATER_AUTH`, and reads the JSON report the suite writes to `BREAKWATER_REPORT`. The full API, including real-authorization mode and replay, is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); the two example suites under `examples/*/tests/` are the reference implementations.
+<!-- ANCHOR_END: writing-a-test -->
 
 ## Attack packs
+<!-- ANCHOR: attack-packs -->
 
 ### `policy-bypass`
 
@@ -268,6 +277,7 @@ Advances the ledger according to a usage profile (`LedgerAdvance::daily_then_sil
 What expiry means on Soroban since Protocol 23: an archived persistent or instance entry is not lost, and a call that touches it does not simply fail. The next transaction that touches an archived entry must restore it (simulation adds the entry to the transaction's restore list) and pay for the restoration, a transaction built without the restore fails, and a contract that never extends TTL sees the entry archived again after every quiet period of at least the minimum TTL. The pack therefore reads each entry's `live_until` directly from the ledger entries, because any contract read, and the SDK's own `get_ttl` test helper, would restore the entry and hide the finding.
 
 The bundled demo (`examples/ttl-archival`) is a payment stream that keeps streams in persistent storage and never calls `extend_ttl`. Under the profile above, a one-year stream is archived after the quiet quarter with 275 days left to run; `PaymentStreamFixed`, which extends every touched entry to the stream's remaining duration, survives the same profile. Two more suites in `examples/ttl-archival/tests/` drive the other invariants: with seed 5, `NoUnboundedTtlExtension` shrinks to 3 steps in which anyone's call to the unauthenticated `bump_ttl` keeps a stream alive 1.3 days past its end; with seed 3, `RestoreCostWithinBudget` shrinks to 4 steps in which one `withdraw_many` after a quiet quarter reads 5 entries from disk against a budget of 3. That 3 is a threshold the suite sets, not a network limit.
+<!-- ANCHOR_END: attack-packs -->
 
 ## How Stellar is used
 
@@ -282,6 +292,7 @@ Breakwater is infrastructure, so "use of Stellar" means use of the protocol itse
 | Stellar CLI + Testnet | Demo contracts are deployed to Testnet and the shrunk `policy-bypass` reproduction is replayed on-chain: three agent-signed payments through the real smart account (see [Testnet evidence](#testnet-evidence)) |
 
 ## Testnet evidence
+<!-- ANCHOR: testnet-evidence -->
 
 Replaying a shrunk failing sequence on Testnet is part of the demo (`scripts/replay-testnet.sh`, see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md#8-replaying-on-testnet)). Local fuzzing stays local; only the exported reproduction goes on-chain. Deployed and replayed on Testnet on 25 October 2026:
 
@@ -301,6 +312,7 @@ Replaying a shrunk failing sequence on Testnet is part of the demo (`scripts/rep
 Each payment above went through the smart account's real `__check_auth`: the agent's Ed25519 key signed the OpenZeppelin `AuthPayload`, and the two `SpendingLimit` policies ran on-chain and let all three through: 147 USDC reached the merchant within 3 537 ledgers (about 4.9 hours, well inside one day of 17 280 ledgers), against a cap the operator meant as 100 USDC per day. The third payment was sent later than the earliest ledger it could have used (5385431, one 1 728-ledger window after the first); any ledger past that window and inside the day shows the same bypass.
 
 The stream's expiry itself cannot be waited for within the hackathon: Testnet's minimum persistent TTL is currently 120 960 ledgers, about seven days (`stellar network settings --network testnet`, `state_archival.min_persistent_ttl`), and the stream entry, created at ledger 5383730 and never extended, is live until ledger 5504689 (`stellar ledger entry fetch contract-data`), roughly 1 November 2026. What the on-chain evidence shows is the stream being created and used; what the local suite shows is the entry being archived with most of the stream still to run. On a real network the consequence is not a failing call but a cost: the next transaction that touches an archived entry must restore it and pay for the restoration, a transaction built without the restore fails, and because the contract never extends TTL the entry is archived again after every quiet period of at least the minimum TTL.
+<!-- ANCHOR_END: testnet-evidence -->
 
 ## Project layout
 
@@ -323,6 +335,7 @@ Breakwater/
 │       └── tests/                   # suite.rs, common/, repro_ttl_archival_11.rs
 ├── scripts/
 │   └── replay-testnet.sh            # replays an exported sequence on Testnet
+├── site/                            # breakwater.belvast.de: landing page, mdBook docs (book/), build.sh
 ├── docs/
 │   ├── assets/                      # logo (source and README size) and social preview image
 │   ├── ARCHITECTURE.md
@@ -367,11 +380,13 @@ Where AI meaningfully generated code or content:
 | CLI, report output, HTML report and Testnet replay scripts | Argument parsing, report formatting, first drafts of the `run` / `export` / `report` commands, the HTML renderer and `scripts/replay-testnet.sh` | UX decisions, pipeline design (how the CLI drives a suite, how an agent-signed authorization entry is spliced into a transaction), on-chain verification |
 | Logo | Generated with Google Nano Banana (Gemini image model) from the author's prompt | Concept (a wave breaking on a breakwater tetrapod), selection, cropping |
 | Demo video narration | Narration synthesised with ElevenLabs from a clone of the author's own voice (created with his consent); video assembled by scripts | Script, voice sample, review of every segment |
+| Website and docs site | First draft of the landing page, mdBook configuration and Pages workflow | Content selection, review against README and docs |
 | Documentation | Drafts of README, `docs/`, CI config | All claims checked against the code and Stellar docs |
 
 Stellar documentation was pulled into the AI context through the official **Raven MCP** server and the **Stellar Dev Skill** plugin. All AI-generated code was read, tested and, where needed, rewritten by the team before being committed.
 
 ## Roadmap
+<!-- ANCHOR: roadmap -->
 
 **Near term**
 
@@ -388,6 +403,7 @@ Stellar documentation was pulled into the AI context through the official **Rave
 - Mainnet fork via `soroban-fork` once it supports `soroban-sdk` 28 (it currently targets 25.x)
 - AI-assisted generation of handlers and invariants from a contract's interface
 - GitHub Action packaging; publish to crates.io; apply to the Stellar Community Fund (Build / Public Goods)
+<!-- ANCHOR_END: roadmap -->
 
 ## Team
 
