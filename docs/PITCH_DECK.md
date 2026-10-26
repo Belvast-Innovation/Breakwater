@@ -27,8 +27,8 @@ Every number below has a source: a command whose output contains it, or a file i
 | One `withdraw_many` after a quiet quarter restores 5 entries, budget 3 (seed 3) | `cargo test -p example-ttl-archival --test suite the_first_call -- --nocapture` |
 | Testnet: three replayed payments, 147 USDC, ledgers 5383703 → 5387240 (3 537 ledgers, about 4.9 h at ~5 s) | README "Testnet evidence"; `stellar ledger entry fetch`, stellar.expert |
 | Seven contracts, five transactions besides deployment and setup | README "Testnet evidence" |
-| 21 commits on `main`, first at 2026-10-25 11:21 UTC (as of PR #20) | `git rev-list --count main`, `git log --reverse main` |
-| 20 merged pull requests (as of PR #20) | `gh pr list --state merged` |
+| 22 commits on `main`, first at 2026-10-25 11:21 UTC (as of PR #21) | `git rev-list --count main`, `git log --reverse main` |
+| 21 merged pull requests (as of PR #21) | `gh pr list --state merged` |
 | 43 tests passing | `cargo test --workspace` |
 | Protocol 23 archived 478 contract entries with stale values; 84 were restored into live state before Protocol 24 fixed it | [stellar.org, Addressing state archival inconsistencies](https://www.stellar.org/blog/developers/addressing-state-archival-inconsistencies-protocol-upgrade-vote-next-week); also `docs/ARCHITECTURE.md` §5 |
 | x402 / MPP agent payments | README "Problem" |
@@ -109,7 +109,7 @@ All in `docs/deck/shots/`, rendered headless (no desktop captures), no user name
 - Bullets:
   - Three agent-signed payments: 147 USDC in 3 537 ledgers (about 4.9 hours), all accepted by the policies.
   - Seven contracts and five transactions on Testnet, each linked from the README.
-  - Built during the event: 21 commits on `main`, 20 merged PRs, 43 tests, CI on every PR.
+  - Built during the event: 22 commits on `main`, 21 merged PRs, 43 tests, CI on every PR.
 - Callout (label **Reproducible**): Every number in this deck comes from a command anyone can rerun.
 - Picture: S5 at the full height of the picture area
 
