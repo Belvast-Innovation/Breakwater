@@ -1,6 +1,6 @@
 # Demo video
 
-Storyboard and narration for the HackMeridian submission video, published at https://vimeo.com/1239334137 (2:55, 1920×1080, 30 fps, H.264 + AAC). The published cut leaves out segments 02, 05 and 06 below and ends each segment 0.2 s after its narration instead of 0.5 s; the other segments, their pictures and their narration are unchanged. Every number in the narration is listed with its source in [`docs/PITCH_DECK.md`](PITCH_DECK.md).
+Storyboard and narration for the HackMeridian submission video, published at https://vimeo.com/1239456909 (2:55, 1920×1080, 30 fps, H.264 + AAC); the full version with all ten segments is at https://vimeo.com/1239334137 (3:43). The published cut leaves out segments 02, 05 and 06 below and ends each segment 0.2 s after its narration instead of 0.5 s; the other segments, their pictures and their narration are unchanged. Every number in the narration is listed with its source in [`docs/PITCH_DECK.md`](PITCH_DECK.md).
 
 The video is assembled by the scripts in [`scripts/video/`](../scripts/video/); see "Producing the video" at the end. Each segment's picture is made as long as its narration, so the narration sets the pace. There are no zoom effects. Deck slides are shown for at most about 9 seconds, each with a highlight box fading in on the part the narration is about; everything else is a screen recording (terminal, report, GitHub, stellar.expert), and the long code image scrolls.
 

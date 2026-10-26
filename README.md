@@ -43,7 +43,7 @@ It ships with two **attack packs** for risks that are specific to Stellar:
 
 > **Status:** HackMeridian 2026 submission (Genesis path · Stellar Unlocked track). Built 25–26 October 2026 in Lisbon. See [Prior work and hackathon scope](#prior-work-and-hackathon-scope).
 >
-> **Submission materials:** website [https://breakwater.belvast.de](https://breakwater.belvast.de) · pitch deck [`docs/deck/breakwater-pitch.pdf`](docs/deck/breakwater-pitch.pdf) · demo video [https://vimeo.com/1239334137](https://vimeo.com/1239334137) (2:55).
+> **Submission materials:** website [https://breakwater.belvast.de](https://breakwater.belvast.de) · pitch deck [`docs/deck/breakwater-pitch.pdf`](docs/deck/breakwater-pitch.pdf) · demo video [https://vimeo.com/1239456909](https://vimeo.com/1239456909) (2:55; full version [https://vimeo.com/1239334137](https://vimeo.com/1239334137), 3:43).
 <!-- ANCHOR_END: intro -->
 
 ---
