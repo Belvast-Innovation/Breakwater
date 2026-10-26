@@ -1,3 +1,12 @@
+/* JetBrains Mono (SIL Open Font License 1.1), served from the website, as on the landing page. */
+@font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-weight: 100 800;
+    font-display: swap;
+    src: url("/assets/fonts/jetbrains-mono-latin.woff2") format("woff2");
+}
+
 /* Breakwater accents on mdBook's navy and coal themes: the deck's yellow for links and
    the active chapter, the logo's cyan for inline code. */
 .navy, .coal {
