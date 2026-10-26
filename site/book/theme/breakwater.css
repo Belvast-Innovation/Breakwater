@@ -7,8 +7,10 @@
     --quote-border: #fdda24;
 }
 
-.navy .content a:hover, .coal .content a:hover {
+/* Underlined, so links stand out from the text by more than colour. */
+.navy .content a, .coal .content a {
     text-decoration: underline;
+    text-underline-offset: 2px;
 }
 
 .menu-title {
@@ -26,7 +28,7 @@
     margin-inline-end: 12px;
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 1.4rem;
-    color: var(--icons);
+    color: var(--fg);
     text-decoration: none;
 }
 
