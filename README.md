@@ -6,24 +6,27 @@
 
 <p><strong>Foundry-style invariant testing for Soroban.</strong></p>
 
+<!-- Project status -->
 <p>
   <a href="https://github.com/Belvast-Innovation/Breakwater/actions/workflows/ci.yml"><img src="https://github.com/Belvast-Innovation/Breakwater/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Belvast-Innovation/Breakwater" alt="License"></a>
   <a href="https://github.com/Belvast-Innovation/Breakwater/commits/main"><img src="https://img.shields.io/github/last-commit/Belvast-Innovation/Breakwater" alt="Last commit"></a>
   <a href="https://www.conventionalcommits.org/en/v1.0.0/"><img src="https://img.shields.io/badge/Conventional%20Commits-1.0.0-FE5196?logo=conventionalcommits&logoColor=white" alt="Conventional Commits 1.0.0"></a>
 </p>
+<!-- Stack -->
 <p>
   <a href="Cargo.toml"><img src="https://img.shields.io/badge/Rust-1.91+-B7410E?logo=rust&logoColor=white" alt="Rust 1.91+"></a>
   <a href="https://docs.rs/soroban-sdk/28.0.0"><img src="https://img.shields.io/badge/soroban--sdk-28.0.0-7D00FF?logo=stellar&logoColor=white" alt="soroban-sdk 28.0.0"></a>
-  <a href="https://stellar.org/blog/developers/introducing-adapter-protocol-28-on-stellar"><img src="https://img.shields.io/badge/Stellar-Protocol%2028-000000?logo=stellar&logoColor=white" alt="Stellar Protocol 28"></a>
-  <a href="https://github.com/stellar/stellar-cli/releases/tag/v28.1.0"><img src="https://img.shields.io/badge/Stellar%20CLI-28.1.0-000000?logo=stellar&logoColor=white" alt="Stellar CLI 28.1.0"></a>
-  <a href="https://crates.io/crates/stellar-accounts/0.8.0"><img src="https://img.shields.io/badge/OpenZeppelin%20stellar--accounts-0.8.0-4E5EE4?logo=openzeppelin&logoColor=white" alt="OpenZeppelin stellar-accounts 0.8.0"></a>
+  <a href="https://stellar.org/blog/developers/introducing-adapter-protocol-28-on-stellar"><img src="https://img.shields.io/badge/Protocol-28-7D00FF?logo=stellar&logoColor=white" alt="Stellar Protocol 28"></a>
+  <a href="https://github.com/stellar/stellar-cli/releases/tag/v28.1.0"><img src="https://img.shields.io/badge/Stellar%20CLI-28.1.0-7D00FF?logo=stellar&logoColor=white" alt="Stellar CLI 28.1.0"></a>
+  <a href="https://crates.io/crates/stellar-accounts/0.8.0"><img src="https://img.shields.io/badge/stellar--accounts-0.8.0-4E5EE4?logo=openzeppelin&logoColor=white" alt="OpenZeppelin stellar-accounts 0.8.0"></a>
   <a href="https://crates.io/crates/proptest/1.12.0"><img src="https://img.shields.io/badge/proptest-1.12-orange" alt="proptest 1.12"></a>
 </p>
+<!-- Hackathon -->
 <p>
-  <a href="#testnet-evidence"><img src="https://img.shields.io/badge/Stellar-Testnet-000000?logo=stellar&logoColor=white" alt="Stellar Testnet"></a>
+  <a href="#testnet-evidence"><img src="https://img.shields.io/badge/Stellar-Testnet-7D00FF?logo=stellar&logoColor=white" alt="Stellar Testnet"></a>
   <a href="docs/SUBMISSION.md"><img src="https://img.shields.io/badge/HackMeridian%202026-Genesis%20%C2%B7%20Stellar%20Unlocked-FDDA24" alt="HackMeridian 2026 · Genesis · Stellar Unlocked"></a>
-  <a href="docs/deck/breakwater-pitch.pdf"><img src="https://img.shields.io/badge/Pitch%20deck-PDF-0F0F0F" alt="Pitch deck"></a>
+  <a href="docs/deck/breakwater-pitch.pdf"><img src="https://img.shields.io/badge/Pitch%20deck-PDF-FDDA24" alt="Pitch deck"></a>
 </p>
 
 </div>
@@ -80,13 +83,15 @@ Breakwater is the reusable layer for both.
 
 ## How it works
 
-```
-┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌───────────────┐
-│  Declare    │ -> │  Generate    │ -> │  Check       │ -> │  Shrink +     │
-│  actors,    │    │  random tx   │    │  invariants  │    │  export as    │
-│  handlers,  │    │  sequences   │    │  after every │    │  unit test    │
-│  invariants │    │  (proptest)  │    │  step        │    │               │
-└─────────────┘    └──────────────┘    └──────────────┘    └───────────────┘
+```mermaid
+flowchart LR
+    declare["<b>Declare</b><br/>actors, handlers,<br/>invariants"]
+    generate["<b>Generate</b><br/>random transaction<br/>sequences (proptest)"]
+    check["<b>Check</b><br/>every invariant<br/>after every step"]
+    shrink["<b>Shrink and export</b><br/>minimal sequence<br/>as a Rust unit test"]
+    declare --> generate --> check
+    check -- "all hold: next step" --> generate
+    check -- violation --> shrink
 ```
 
 1. **Declare.** Implement the `Handler` trait for each contract call the fuzzer may make, give each one an `Actor`, and implement `Invariant` for each property that must hold.

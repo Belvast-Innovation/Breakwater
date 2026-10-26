@@ -19,14 +19,16 @@ This document describes Breakwater as implemented. When the implementation chang
 
 ## 2. Core concepts
 
-```
-Suite
- ├── env:        Env                post-setup environment; snapshotted for every run
- ├── handlers:   [Box<dyn Handler>] what may be called, by which actors, with an argument strategy
- ├── invariants: [Box<dyn Invariant>] what must hold after every step
- ├── advance:    LedgerAdvance      how ledger seq / timestamp move between steps
- ├── on_restore: [Fn(&Env)]         re-registers native test contracts on each restored Env
- └── config:     SuiteConfig        seed, step range, cases, auth mode, max shrink iterations
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 420}}}%%
+flowchart LR
+    suite(["<b>Suite</b>"])
+    suite --- env["<b>env:</b> Env<br/>post-setup environment; snapshotted for every run"]
+    suite --- handlers["<b>handlers:</b> [Box#lt;dyn Handler#gt;]<br/>what may be called, by which actors, with an argument strategy"]
+    suite --- invariants["<b>invariants:</b> [Box#lt;dyn Invariant#gt;]<br/>what must hold after every step"]
+    suite --- advance["<b>advance:</b> LedgerAdvance<br/>how ledger sequence and timestamp move between steps"]
+    suite --- on_restore["<b>on_restore:</b> [Fn(#amp;Env)]<br/>re-registers native test contracts on each restored Env"]
+    suite --- config["<b>config:</b> SuiteConfig<br/>seed, step range, cases, auth mode, max shrink iterations"]
 ```
 
 ### `Actor`
@@ -80,30 +82,19 @@ Because the gap is stored in each generated step, shrinking keeps the gaps of th
 
 ## 3. Execution pipeline
 
-```
-         ┌──────────┐
- seed ──▶│ proptest │──▶ Vec<Step{handler, actor, args}>
-         │  state   │
-         │ machine  │
-         └────┬─────┘
-              │ apply
-              ▼
-     ┌────────────────┐   per step:
-     │ Runner         │   1. env.ledger().set(advance)
-     │ (Env + TxLog)  │   2. handler.call(env, actor, args)   ← real auth for policy pack
-     │                │   3. for inv in invariants: inv.check(env, log)?
-     └────────┬───────┘
-              │ on Violation
-              ▼
-     ┌────────────────┐
-     │ Shrinker       │  proptest shrinks the Vec<Step>; Runner re-executes from a
-     │                │  fresh / snapshot Env each candidate until minimal
-     └────────┬───────┘
-              ▼
-     ┌────────────────┐
-     │ Exporter       │  writes tests/repro_<suite>_<seed>.rs: a #[test] that rebuilds
-     │                │  the Env, applies the steps, asserts the violation
-     └────────────────┘
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 420}}}%%
+flowchart TD
+    seed(["seed"]) --> machine["<b>proptest state machine</b>"]
+    machine -- "Vec#lt;Step{handler, actor, args}#gt;" --> advance
+    subgraph runner["Runner (Env + TxLog)"]
+        direction TB
+        advance["Step 1: env.ledger().set(advance)"] --> invoke["Step 2: handler.call(env, actor, args)<br/>real auth for the policy pack"]
+        invoke --> verify["Step 3: inv.check(env, log) for every invariant"]
+        verify -- "all hold: next step" --> advance
+    end
+    verify -- Violation --> shrinker["<b>Shrinker</b><br/>proptest shrinks the Vec#lt;Step#gt;;<br/>the Runner re-executes each candidate from a fresh snapshot Env until minimal"]
+    shrinker --> exporter["<b>Exporter</b><br/>writes tests/repro_#lt;suite#gt;_#lt;seed#gt;.rs:<br/>a #35;[test] that rebuilds the Env, applies the steps<br/>and asserts the violation"]
 ```
 
 **Why `proptest-state-machine`.** It already provides sequence generation, preconditions (so we do not generate obviously invalid steps) and shrinking of sequences. Writing a custom shrinker in two days is not realistic; reusing this is the single biggest time saver in the plan.
