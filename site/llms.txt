@@ -23,7 +23,7 @@ It ships with two attack packs for risks that are specific to Stellar: `policy-b
 
 ## Optional
 
-- [Demo video](https://vimeo.com/1239334137): 3:43 walkthrough of both demos
+- [Demo video](https://vimeo.com/1239334137): 2:55 walkthrough of both demos
 - [Pitch deck](https://github.com/Belvast-Innovation/Breakwater/blob/main/docs/deck/breakwater-pitch.pdf): HackMeridian 2026 pitch deck (PDF)
 - [Policy-bypass report](https://breakwater.belvast.de/reports/policy-bypass-seed-7.html): HTML report of the seed-7 run
 - [TTL-archival report](https://breakwater.belvast.de/reports/ttl-archival-seed-11.html): HTML report of the seed-11 run
