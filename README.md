@@ -84,11 +84,11 @@ Breakwater is the reusable layer for both.
 ## How it works
 
 ```mermaid
-flowchart LR
-    declare["<b>Declare</b><br/>actors, handlers,<br/>invariants"]
-    generate["<b>Generate</b><br/>random call<br/>sequences"]
-    check["<b>Check</b><br/>invariants after<br/>every step"]
-    shrink["<b>Shrink</b><br/>export a minimal<br/>Rust test"]
+flowchart TD
+    declare["<b>Declare</b><br/>actors, handlers, invariants"]
+    generate["<b>Generate</b><br/>random call sequences (proptest)"]
+    check["<b>Check</b><br/>every invariant after every step"]
+    shrink["<b>Shrink and export</b><br/>a minimal sequence as a Rust unit test"]
     declare --> generate --> check
     check -- next step --> generate
     check -- violation --> shrink
