@@ -84,6 +84,7 @@ Breakwater is the reusable layer for both.
 ## How it works
 
 ```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 400}}}%%
 flowchart TD
     declare["<b>Declare</b><br/>actors, handlers, invariants"]
     generate["<b>Generate</b><br/>random call sequences (proptest)"]
