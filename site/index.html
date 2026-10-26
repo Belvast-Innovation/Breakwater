@@ -270,10 +270,10 @@
     <h1>Breakwater</h1>
     <p class="tagline">Foundry-style invariant fuzzing for Soroban</p>
     <div class="buttons">
-      <a class="btn btn-primary" href="/docs/">Read the docs</a>
-      <a class="btn btn-secondary" href="https://github.com/Belvast-Innovation/Breakwater">GitHub</a>
+      <a class="btn btn-primary" href="/docs/" target="_blank" rel="noopener">Read the docs</a>
+      <a class="btn btn-secondary" href="https://github.com/Belvast-Innovation/Breakwater" target="_blank" rel="noopener">GitHub</a>
     </div>
-    <p class="byline">An open-source product by <a href="https://belvast.de">Belvast Innovation</a> · Apache-2.0</p>
+    <p class="byline">An open-source product by <a href="https://belvast.de" target="_blank" rel="noopener">Belvast Innovation</a> · Apache-2.0</p>
   </div>
 </header>
 <div class="pixels" aria-hidden="true"></div>
@@ -290,7 +290,7 @@
         <span class="play" aria-hidden="true"></span>
       </button>
     </div>
-    <p class="note">Loads a Vimeo player; Vimeo's <a href="https://vimeo.com/privacy">privacy policy</a> applies. Or watch it on <a href="https://vimeo.com/1239334137">vimeo.com</a>.</p>
+    <p class="note">Loads a Vimeo player; Vimeo's <a href="https://vimeo.com/privacy" target="_blank" rel="noopener">privacy policy</a> applies. Or watch it on <a href="https://vimeo.com/1239334137" target="_blank" rel="noopener">vimeo.com</a>.</p>
   </div>
 </section>
 
@@ -345,13 +345,13 @@
         <p class="figure">49 → 49 → 49</p>
         <p class="meta">policy-bypass · seed 7</p>
         <p>Three payments of 49 USDC, the third exactly one 1 728-ledger window after the first: 147 USDC in a day against a cap meant as 100. The window was configured as 1 728 ledgers instead of 17 280; the policy code is correct, the configuration is not.</p>
-        <p><a href="/reports/policy-bypass-seed-7.html">HTML report</a></p>
+        <p><a href="/reports/policy-bypass-seed-7.html" target="_blank" rel="noopener">HTML report</a></p>
       </article>
       <article class="card">
         <p class="figure">275 days</p>
         <p class="meta">ttl-archival · seed 11</p>
         <p>A payment stream that never calls <code>extend_ttl</code> is archived with 275 days left to run, shrunk to two calls.</p>
-        <p><a href="/reports/ttl-archival-seed-11.html">HTML report</a></p>
+        <p><a href="/reports/ttl-archival-seed-11.html" target="_blank" rel="noopener">HTML report</a></p>
       </article>
       <article class="card">
         <p class="figure">1.3 days</p>
@@ -372,18 +372,18 @@
     <h2 id="testnet-title">Testnet evidence</h2>
     <p class="lead">The shrunk bypass replayed on Stellar Testnet through the real OpenZeppelin smart account, signed by the agent's Ed25519 key: 147 USDC in 3 537 ledgers (about 4.9 hours), all accepted by the on-chain policies.</p>
     <ul class="txs">
-      <li><b>Payment 1</b><span>49 USDC, ledger 5383703</span><a href="https://stellar.expert/explorer/testnet/tx/b5ea44983473462379a6909abc335105a040f6d4fee83908cf97dee49cec6772">b5ea4498…6772</a></li>
-      <li><b>Payment 2</b><span>49 USDC, ledger 5383715</span><a href="https://stellar.expert/explorer/testnet/tx/82be1eb8d373bf91aecc9ca4743041ea1f50d1961f7b5fb7ba7a3f9add1e5608">82be1eb8…5608</a></li>
-      <li><b>Payment 3</b><span>49 USDC, ledger 5387240</span><a href="https://stellar.expert/explorer/testnet/tx/3f30f306985585ff62b31271f7aa050a26ec82f6458925d17aa5c32ce157aa8e">3f30f306…aa8e</a></li>
+      <li><b>Payment 1</b><span>49 USDC, ledger 5383703</span><a href="https://stellar.expert/explorer/testnet/tx/b5ea44983473462379a6909abc335105a040f6d4fee83908cf97dee49cec6772" target="_blank" rel="noopener">b5ea4498…6772</a></li>
+      <li><b>Payment 2</b><span>49 USDC, ledger 5383715</span><a href="https://stellar.expert/explorer/testnet/tx/82be1eb8d373bf91aecc9ca4743041ea1f50d1961f7b5fb7ba7a3f9add1e5608" target="_blank" rel="noopener">82be1eb8…5608</a></li>
+      <li><b>Payment 3</b><span>49 USDC, ledger 5387240</span><a href="https://stellar.expert/explorer/testnet/tx/3f30f306985585ff62b31271f7aa050a26ec82f6458925d17aa5c32ce157aa8e" target="_blank" rel="noopener">3f30f306…aa8e</a></li>
     </ul>
-    <p>All seven contracts and five transactions are listed under <a href="/docs/testnet-evidence.html">Testnet evidence</a> in the docs.</p>
+    <p>All seven contracts and five transactions are listed under <a href="/docs/testnet-evidence.html" target="_blank" rel="noopener">Testnet evidence</a> in the docs.</p>
   </div>
 </section>
 
 <section id="quick-start" aria-labelledby="quick-title">
   <div class="wrap">
     <h2 id="quick-title">Quick start</h2>
-    <p class="lead">Rust stable with the <code>wasm32v1-none</code> target and the Stellar CLI; see <a href="/docs/getting-started.html">Getting started</a>.</p>
+    <p class="lead">Rust stable with the <code>wasm32v1-none</code> target and the Stellar CLI; see <a href="/docs/getting-started.html" target="_blank" rel="noopener">Getting started</a>.</p>
 <pre><code>git clone https://github.com/Belvast-Innovation/Breakwater
 cd Breakwater
 cargo build --workspace
@@ -402,7 +402,7 @@ cargo run -p breakwater-cli -- report run.json --html report.html</code></pre>
 <section id="roadmap" aria-labelledby="roadmap-title">
   <div class="wrap">
     <h2 id="roadmap-title">Roadmap</h2>
-    <p class="lead">Near term. The full list is in the <a href="/docs/roadmap.html">docs</a>.</p>
+    <p class="lead">Near term. The full list is in the <a href="/docs/roadmap.html" target="_blank" rel="noopener">docs</a>.</p>
     <ul class="roadmap">
       <li>Rule-rotation probe for <code>policy-bypass</code>: generate <code>remove_context_rule</code> + <code>add_context_rule</code> under real auth, since a re-created rule starts <code>SpendingLimit</code> with an empty history</li>
       <li>Malicious keep-alive: bias generators toward unbounded <code>extend_ttl</code> calls on every public entry point, building on <code>NoUnboundedTtlExtension</code></li>
@@ -419,14 +419,14 @@ cargo run -p breakwater-cli -- report run.json --html report.html</code></pre>
   <div class="wrap">
     <nav aria-label="Footer">
       <ul>
-        <li><a href="https://belvast.de">Belvast Innovation</a></li>
-        <li><a href="https://belvast.de/impressum/" lang="de">Impressum</a></li>
-        <li><a href="https://belvast.de/datenschutz/" lang="de">Datenschutz</a></li>
-        <li><a href="https://github.com/Belvast-Innovation/Breakwater">GitHub</a></li>
-        <li><a href="https://github.com/Belvast-Innovation/Breakwater/blob/main/LICENSE">Apache-2.0</a></li>
+        <li><a href="https://belvast.de" target="_blank" rel="noopener">Belvast Innovation</a></li>
+        <li><a href="https://belvast.de/impressum/" lang="de" target="_blank" rel="noopener">Impressum</a></li>
+        <li><a href="https://belvast.de/datenschutz/" lang="de" target="_blank" rel="noopener">Datenschutz</a></li>
+        <li><a href="https://github.com/Belvast-Innovation/Breakwater" target="_blank" rel="noopener">GitHub</a></li>
+        <li><a href="https://github.com/Belvast-Innovation/Breakwater/blob/main/LICENSE" target="_blank" rel="noopener">Apache-2.0</a></li>
       </ul>
     </nav>
-    <p>Built at HackMeridian 2026, Lisbon.</p>
+    <p>Built with Passion at HackMeridian 2026, Lisbon.</p>
     <p>Logo generated with Google Nano Banana; demo narration synthesised with ElevenLabs from the author's own voice.</p>
   </div>
 </footer>
