@@ -27,9 +27,9 @@ Every number below has a source: a command whose output contains it, or a file i
 | One `withdraw_many` after a quiet quarter restores 5 entries, budget 3 (seed 3) | `cargo test -p example-ttl-archival --test suite the_first_call -- --nocapture` |
 | Testnet: three replayed payments, 147 USDC, ledgers 5383703 → 5387240 (3 537 ledgers, about 4.9 h at ~5 s) | README "Testnet evidence"; `stellar ledger entry fetch`, stellar.expert |
 | Seven contracts, five transactions besides deployment and setup | README "Testnet evidence" |
-| 11 commits on `main`, first at 2026-10-25 11:21 UTC | `git rev-list --count main`, `git log --reverse main` |
-| 10 merged pull requests | `gh pr list --state merged` |
-| 40 tests passing | `cargo test --workspace` |
+| 19 commits on `main`, first at 2026-10-25 11:21 UTC (as of PR #18) | `git rev-list --count main`, `git log --reverse main` |
+| 18 merged pull requests (as of PR #18) | `gh pr list --state merged` |
+| 43 tests passing | `cargo test --workspace` |
 | Protocol 23 archived 478 contract entries with stale values; 84 were restored into live state before Protocol 24 fixed it | [stellar.org, Addressing state archival inconsistencies](https://www.stellar.org/blog/developers/addressing-state-archival-inconsistencies-protocol-upgrade-vote-next-week); also `docs/ARCHITECTURE.md` §5 |
 | x402 / MPP agent payments | README "Problem" |
 
@@ -55,6 +55,7 @@ All in `docs/deck/shots/`, rendered headless (no desktop captures), no user name
 - Header: `PLATFORM 01 / 07`
 - Pill: `INVARIANT TESTING FOR SOROBAN`
 - Title: `BREAK` / `WATER`
+- Logo: `docs/assets/breakwater-logo.png` (transparent background), centred between the title and the template's motif
 
 ### 2. The Solution
 
@@ -64,7 +65,7 @@ All in `docs/deck/shots/`, rendered headless (no desktop captures), no user name
   - Random multi-step sequences run against a local Soroban `Env`; every invariant is checked after every step.
   - A failure is shrunk to its minimal steps and exported as a Rust regression test.
   - Two attack packs for Stellar-specific risk: smart-account policies and TTL state archival.
-- Think: Single-call tests prove each payment is fine. Only a sequence shows whether the account is.
+- Callout (label **Why sequences**): Single-call tests prove each payment is fine. Only a sequence shows whether the account is.
 - Picture: S1
 
 ### 3. PMF
@@ -75,7 +76,7 @@ All in `docs/deck/shots/`, rendered headless (no desktop captures), no user name
   - Agent wallets paying over x402 / MPP rely on smart-account policies; a policy that holds for one call may fail for five.
   - Protocol 23 archived 478 contract entries with stale values; 84 were restored into live state before Protocol 24 fixed it.
   - For every Soroban team shipping custom accounts or long-lived storage; a suite runs as `cargo test`.
-- Think: The bugs that cost money here only appear across many transactions and long gaps.
+- Callout (label **The gap**): The bugs that cost money here only appear across many transactions and long gaps.
 - Picture: S4
 
 ### 4. Technical Workflow
@@ -86,7 +87,7 @@ All in `docs/deck/shots/`, rendered headless (no desktop captures), no user name
   - `proptest-state-machine` generates seeded sequences; each case restores a ledger snapshot instead of redeploying.
   - Real auth mode signs every step with Ed25519, so OpenZeppelin's `__check_auth` and policies really run.
   - TTL is read from ledger entries without touching them, so probing never auto-restores an archived entry.
-- Think: A finding under real authorization is a real bypass, not a mocking artifact.
+- Callout (label **Real auth**): A finding under real authorization is a real bypass, not a mocking artifact.
 - Picture: flow of four rounded rectangles (DECLARE → GENERATE → CHECK → SHRINK, the last labelled "minimal repro → .rs test") in the template's yellow on dark, above S7
 
 ### 5. Findings
@@ -98,7 +99,7 @@ All in `docs/deck/shots/`, rendered headless (no desktop captures), no user name
   - No `extend_ttl`: "stream 0 is archived with 275 days left to run".
   - Unauthenticated `bump_ttl` keeps a stream alive 1.3 days past its end.
   - After 90 quiet days one `withdraw_many` restores 5 entries against a budget of 3.
-- Think: Breakwater found the three-step sequence that no single-call test can see.
+- Callout (label **Takeaway**): Breakwater found the three-step sequence that no single-call test can see.
 - Picture: S3
 
 ### 6. Testnet & Progress
@@ -108,8 +109,8 @@ All in `docs/deck/shots/`, rendered headless (no desktop captures), no user name
 - Bullets:
   - Three agent-signed payments: 147 USDC in 3 537 ledgers (about 4.9 hours), all accepted by the policies.
   - Seven contracts and five transactions on Testnet, each linked from the README.
-  - Built during the event: 11 commits on `main`, 10 merged PRs, 40 tests, CI on every PR.
-- Think: Every number in this deck comes from a command anyone can rerun.
+  - Built during the event: 19 commits on `main`, 18 merged PRs, 43 tests, CI on every PR.
+- Callout (label **Reproducible**): Every number in this deck comes from a command anyone can rerun.
 - Picture: S5 at the full height of the picture area
 
 ### 7. The Team
@@ -120,9 +121,9 @@ All in `docs/deck/shots/`, rendered headless (no desktop captures), no user name
   - Solo builder: framework design, Rust implementation, attack packs, Testnet replay.
   - Repository: github.com/Belvast-Innovation/Breakwater (Apache-2.0).
   - Next: rule-rotation probe, restoration-cost CI gate, XDR replay export; then crates.io and a GitHub Action.
-- Think: Everything shown was built during the event; the commit history is the record.
+- Callout (label **Provenance**): Everything shown was built during the event; the commit history is the record.
 - Picture: S8 with the repository URL
 
 ## Layout changes to the template
 
-To fit a screenshot in the right 45% of each content slide without covering text, the subtitle, bullet and Think boxes are narrowed to the left 8.6 inches, the subtitle is set at 24 pt and bullets at 20 pt (template: 28 pt and 24 pt), and the decorative shapes on the right of the content slides are removed. On Findings, which has four bullets, the bullet box is taller and the Think box sits lower. Fonts, colours, the header bar, the footer and the theme are unchanged.
+To fit a screenshot in the right 45% of each content slide without covering text, the subtitle, bullet and callout boxes are narrowed to the left 8.6 inches, the subtitle is set at 24 pt and bullets at 20 pt (template: 28 pt and 24 pt), and the decorative shapes on the right of the content slides are removed. On Findings, which has four bullets, the bullet box is taller and the callout box sits lower. The template's "👉 Think:" callout prefix is replaced by a short bold label per slide. Fonts, colours, the header bar, the footer and the theme are unchanged.
