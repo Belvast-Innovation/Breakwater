@@ -17,7 +17,7 @@ From the portal "Rules & conduct" page:
 | --- | --- | --- |
 | Public GitHub repo | Source + README + architecture overview | [x] https://github.com/Belvast-Innovation/Breakwater |
 | README | Summary, problem, setup, installation, demo instructions, how Stellar is used, prior work, AI usage | [x] |
-| Demo video | **2–4 minutes**, YouTube or Vimeo link | [x] https://vimeo.com/1239334137 (3:43) |
+| Demo video | **2–4 minutes**, YouTube or Vimeo link | [x] https://vimeo.com/1239334137 (2:55) |
 | Pitch deck | PDF / PPTX / PPT / HTML, **≤ 20 MiB** | [x] `docs/deck/breakwater-pitch.pdf` (0.67 MiB) |
 | Testnet evidence | Contract IDs + at least one tx hash in README | [x] seven contract ids, five confirmed transactions besides deployment and setup: three replayed bypass payments, `create_stream`, `withdraw` |
 | Track selection | Builder: **Genesis**. Thematic: **Stellar Unlocked** | [x] Genesis + Stellar Unlocked, selected in the portal draft |
