@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Breakwater · Foundry-style invariant fuzzing for Soroban</title>
+<meta name="description" content="Breakwater is a Rust framework and CLI for stateful property testing of Stellar smart contracts: it generates multi-step transaction sequences, checks every invariant after every step, and shrinks any failure to a reproducible Rust test.">
+<link rel="canonical" href="https://breakwater.belvast.de/">
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/assets/icon-512.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Breakwater">
+<meta property="og:url" content="https://breakwater.belvast.de/">
+<meta property="og:title" content="Breakwater · Foundry-style invariant fuzzing for Soroban">
+<meta property="og:description" content="Declare actors, handlers and invariants in Rust; Breakwater searches for the call sequence that breaks them, shrinks it and exports it as a regression test.">
+<meta property="og:image" content="https://breakwater.belvast.de/assets/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="Breakwater logo: a wave breaking on a tetrapod">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Breakwater · Foundry-style invariant fuzzing for Soroban">
+<meta name="twitter:description" content="Declare actors, handlers and invariants in Rust; Breakwater searches for the call sequence that breaks them, shrinks it and exports it as a regression test.">
+<meta name="twitter:image" content="https://breakwater.belvast.de/assets/social-preview.png">
+<meta name="twitter:image:alt" content="Breakwater logo: a wave breaking on a tetrapod">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "Breakwater",
+  "description": "Foundry-style invariant fuzzing for Soroban smart contracts.",
+  "url": "https://breakwater.belvast.de/",
+  "codeRepository": "https://github.com/Belvast-Innovation/Breakwater",
+  "programmingLanguage": "Rust",
+  "license": "https://www.apache.org/licenses/LICENSE-2.0",
+  "author": { "@type": "Organization", "name": "Belvast Innovation", "url": "https://belvast.de" }
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap">
+
+<style>
+  :root {
+    --bg: #000;
+    --panel: #0b0b0b;
+    --line: #4e4e4e;
+    --stone: #818181;
+    --stone-light: #b9b9b9;
+    --text: #ececec;
+    --muted: #b4b4b4;
+    --wave: #0054a4;
+    --foam: #00fbfc;
+    --accent: #fdda24;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.6 var(--sans);
+    -webkit-text-size-adjust: 100%;
+  }
+  a { color: var(--foam); }
+  a:hover { color: var(--accent); }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  code, pre { font-family: var(--mono); }
+  code { font-size: 0.9em; color: var(--foam); }
+  h1, h2, h3 { font-family: var(--mono); line-height: 1.2; margin: 0; }
+  h2 {
+    font-size: clamp(1.4rem, 3.5vw, 2rem);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.5rem;
+  }
+  h2::before { content: "▚ "; color: var(--accent); }
+  h3 { font-size: 1.1rem; }
+  p { margin: 0 0 1rem; }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+  section { padding: 72px 0; border-top: 1px solid #1c1c1c; }
+  .lead { color: var(--muted); max-width: 46rem; margin-bottom: 2rem; }
+  .skip {
+    position: absolute; left: -999px; top: 8px;
+    background: var(--accent); color: #000; padding: 8px 12px; z-index: 10;
+  }
+  .skip:focus { left: 8px; }
+
+  /* A stepped strip in the logo's two blues, like the wave's pixel edge. */
+  .pixels {
+    height: 12px;
+    background:
+      linear-gradient(90deg, transparent 0 50%, var(--foam) 50% 100%) 0 0 / 24px 6px repeat-x,
+      linear-gradient(90deg, var(--wave) 0 50%, var(--foam) 50% 100%) 12px 6px / 24px 6px repeat-x;
+  }
+
+  /* Hero */
+  .hero { padding: 56px 0 64px; text-align: center; border-top: 0; }
+  .hero img { width: min(360px, 80vw); height: auto; }
+  .hero h1 {
+    font-size: clamp(2.6rem, 9vw, 4.6rem);
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    margin-top: 12px;
+  }
+  .tagline {
+    font-family: var(--mono);
+    font-size: clamp(1rem, 2.6vw, 1.3rem);
+    color: var(--foam);
+    margin: 12px auto 28px;
+  }
+  .buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block;
+    font: 700 1rem/1 var(--mono);
+    padding: 14px 22px;
+    text-decoration: none;
+    border: 3px solid var(--accent);
+    box-shadow: 5px 5px 0 var(--wave);
+    transition: transform 0.08s, box-shadow 0.08s;
+  }
+  .btn:hover { transform: translate(2px, 2px); box-shadow: 3px 3px 0 var(--wave); }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { color: #000; }
+  .btn-secondary { background: #000; color: var(--accent); }
+  .btn-secondary:hover { color: var(--accent); }
+  .byline { color: var(--muted); font-size: 0.95rem; margin: 28px 0 0; }
+  .byline a { color: var(--text); }
+
+  /* Video: the Vimeo iframe is created only after a click. */
+  .video {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: #111;
+    border: 3px solid var(--stone);
+    box-shadow: 8px 8px 0 var(--wave);
+  }
+  .video button {
+    all: unset;
+    position: absolute; inset: 0;
+    cursor: pointer;
+    display: block;
+  }
+  .video img, .video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+  .video img { object-fit: cover; }
+  .play {
+    position: absolute; left: 79%; top: 45%;
+    width: 96px; height: 96px;
+    transform: translate(-50%, -50%);
+    background: var(--accent);
+    border: 4px solid #000;
+    box-shadow: 6px 6px 0 var(--wave);
+  }
+  .play::after {
+    content: "";
+    position: absolute; left: 36px; top: 26px;
+    border-style: solid;
+    border-width: 18px 0 18px 30px;
+    border-color: transparent transparent transparent #000;
+  }
+  .video button:hover .play, .video button:focus-visible .play { background: var(--foam); }
+  .video button:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+  .note { color: var(--muted); font-size: 0.9rem; margin-top: 18px; }
+
+  /* Cards */
+  .grid { display: grid; gap: 24px; }
+  .grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .grid-4 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+  .card {
+    background: var(--panel);
+    border: 2px solid var(--line);
+    padding: 24px;
+    box-shadow: 6px 6px 0 #1f1f1f;
+  }
+  .card h3 { margin-bottom: 12px; }
+  .card h3 code { font-size: 1em; }
+  .card dl { margin: 0; }
+  .card dt {
+    font: 700 0.8rem/1.4 var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-top: 12px;
+  }
+  .card dd { margin: 4px 0 0; color: var(--muted); }
+  .card p:last-child { margin-bottom: 0; }
+
+  /* Steps */
+  .steps { list-style: none; padding: 0; margin: 0; counter-reset: step; display: grid; gap: 16px;
+           grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); }
+  .steps li {
+    counter-increment: step;
+    border: 2px solid var(--line);
+    border-top: 6px solid var(--foam);
+    background: var(--panel);
+    padding: 16px;
+  }
+  .steps li:nth-child(n+4) { border-top-color: var(--accent); }
+  .steps strong { display: block; font: 800 1.05rem/1.3 var(--mono); margin-bottom: 8px; }
+  .steps strong::before { content: counter(step, decimal-leading-zero) " "; color: var(--stone-light); }
+  .steps span { color: var(--muted); font-size: 0.95rem; }
+
+  /* Findings */
+  .figure {
+    font: 800 clamp(1.7rem, 4vw, 2.2rem)/1.15 var(--mono);
+    color: var(--accent);
+    margin-bottom: 8px;
+    white-space: nowrap;
+  }
+  .meta { font: 0.8rem/1.4 var(--mono); color: var(--stone-light); margin-bottom: 12px; }
+
+  /* Testnet */
+  .txs { list-style: none; padding: 0; margin: 0 0 1.5rem; display: grid; gap: 12px; }
+  .txs li {
+    display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline;
+    border: 2px solid var(--line); background: var(--panel); padding: 14px 16px;
+  }
+  .txs b { font-family: var(--mono); color: var(--accent); min-width: 7.5rem; }
+  .txs span { color: var(--muted); flex: 1 1 14rem; }
+  .txs a { font-family: var(--mono); }
+
+  /* Quick start */
+  pre {
+    background: #0b0b0b;
+    border: 2px solid var(--line);
+    border-left: 6px solid var(--foam);
+    padding: 18px;
+    overflow-x: auto;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    margin: 0 0 1rem;
+  }
+  pre code { color: var(--text); font-size: 1em; }
+  .comment { color: var(--stone-light); }
+
+  .roadmap { padding-left: 1.2rem; margin: 0; }
+  .roadmap li { margin-bottom: 10px; color: var(--muted); }
+  .roadmap li::marker { content: "■  "; color: var(--accent); }
+
+  footer { border-top: 1px solid #1c1c1c; padding: 40px 0 56px; color: var(--muted); font-size: 0.92rem; }
+  footer nav ul { list-style: none; padding: 0; margin: 0 0 16px; display: flex; flex-wrap: wrap; gap: 8px 24px; }
+  footer a { color: var(--text); }
+  footer p { margin: 0 0 8px; }
+
+  @media (max-width: 600px) {
+    body { font-size: 16px; }
+    section { padding: 52px 0; }
+    .play { width: 72px; height: 72px; }
+    .play::after { left: 26px; top: 18px; border-width: 14px 0 14px 23px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .btn { transition: none; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="hero">
+  <div class="wrap">
+    <img src="/assets/breakwater-logo.webp" width="800" height="546" alt="Breakwater logo: a wave breaking on a tetrapod" fetchpriority="high">
+    <h1>Breakwater</h1>
+    <p class="tagline">Foundry-style invariant fuzzing for Soroban</p>
+    <div class="buttons">
+      <a class="btn btn-primary" href="/docs/">Read the docs</a>
+      <a class="btn btn-secondary" href="https://github.com/Belvast-Innovation/Breakwater">GitHub</a>
+    </div>
+    <p class="byline">An open-source product by <a href="https://belvast.de">Belvast Innovation</a> · Apache-2.0</p>
+  </div>
+</header>
+<div class="pixels" aria-hidden="true"></div>
+
+<main id="main">
+
+<section id="demo" aria-labelledby="demo-title">
+  <div class="wrap">
+    <h2 id="demo-title">Demo video</h2>
+    <p class="lead">The HackMeridian 2026 submission demo (3:43).</p>
+    <div class="video" id="video">
+      <button type="button" id="video-play" aria-label="Play the Breakwater demo video (loads the Vimeo player)">
+        <img src="/assets/video-poster.webp" width="1280" height="720" alt="" loading="lazy" decoding="async">
+        <span class="play" aria-hidden="true"></span>
+      </button>
+    </div>
+    <p class="note">Loads a Vimeo player; Vimeo's <a href="https://vimeo.com/privacy">privacy policy</a> applies. Or watch it on <a href="https://vimeo.com/1239334137">vimeo.com</a>.</p>
+  </div>
+</section>
+
+<section id="problem" aria-labelledby="problem-title">
+  <div class="wrap">
+    <h2 id="problem-title">The problem</h2>
+    <p class="lead">Soroban has static analysis, AI review and formal verification, but no reusable stateful fuzzing. Breakwater declares <em>actors</em> (who can call), <em>handlers</em> (what they can call) and <em>invariants</em> (what must always hold), and ships two attack packs for risks that are specific to Stellar.</p>
+    <div class="grid grid-2">
+      <article class="card">
+        <h3><code>policy-bypass</code></h3>
+        <dl>
+          <dt>Risk it hunts</dt>
+          <dd>Multi-step sequences that slip past OpenZeppelin smart-account policies (spending limits, context rules, signer scopes).</dd>
+          <dt>Why it matters</dt>
+          <dd>These policies are the safety layer for AI-agent wallets paying over x402 / MPP. A policy that holds for one transaction may fail for five.</dd>
+        </dl>
+      </article>
+      <article class="card">
+        <h3><code>ttl-archival</code></h3>
+        <dl>
+          <dt>Risk it hunts</dt>
+          <dd>Contract state that expires under Soroban's TTL-based state archival while the business logic still depends on it.</dd>
+          <dt>Why it matters</dt>
+          <dd>A one-year payment stream whose storage entry is archived at month six is a correctness bug no EVM tool knows to look for.</dd>
+        </dl>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="how-it-works" aria-labelledby="how-title">
+  <div class="wrap">
+    <h2 id="how-title">How it works</h2>
+    <p class="lead">A suite is an ordinary <code>cargo test</code>. Every run takes a seed, and a failure prints the seed to reproduce it with.</p>
+    <ol class="steps">
+      <li><strong>Declare</strong><span>A <code>Handler</code> for each contract call, an <code>Actor</code> for each caller, an <code>Invariant</code> for each property that must hold.</span></li>
+      <li><strong>Generate</strong><span>Seeded multi-step sequences from <code>proptest-state-machine</code> against a local Soroban <code>Env</code>; ledger sequence and timestamp advance between steps.</span></li>
+      <li><strong>Check</strong><span>Every invariant after every step, with authorization through the real <code>__check_auth</code> path for the policy pack.</span></li>
+      <li><strong>Shrink</strong><span>A failing sequence is shrunk to the shortest reproduction.</span></li>
+      <li><strong>Export</strong><span><code>breakwater export</code> writes it as a self-contained <code>#[test]</code> you can drop into your crate.</span></li>
+      <li><strong>Replay</strong><span>The test replays exactly the recorded steps and asserts the same violation; the policy bypass was replayed on Testnet.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section id="findings" aria-labelledby="findings-title">
+  <div class="wrap">
+    <h2 id="findings-title">Findings</h2>
+    <p class="lead">Every payment passes alone; the sequence does not. Each number comes from a command anyone can rerun.</p>
+    <div class="grid grid-4">
+      <article class="card">
+        <p class="figure">49 → 49 → 49</p>
+        <p class="meta">policy-bypass · seed 7</p>
+        <p>Three payments of 49 USDC, the third exactly one 1 728-ledger window after the first: 147 USDC in a day against a cap meant as 100. The window was configured as 1 728 ledgers instead of 17 280; the policy code is correct, the configuration is not.</p>
+        <p><a href="/reports/policy-bypass-seed-7.html">HTML report</a></p>
+      </article>
+      <article class="card">
+        <p class="figure">275 days</p>
+        <p class="meta">ttl-archival · seed 11</p>
+        <p>A payment stream that never calls <code>extend_ttl</code> is archived with 275 days left to run, shrunk to two calls.</p>
+        <p><a href="/reports/ttl-archival-seed-11.html">HTML report</a></p>
+      </article>
+      <article class="card">
+        <p class="figure">1.3 days</p>
+        <p class="meta">ttl-archival · seed 5</p>
+        <p>An unauthenticated <code>bump_ttl</code>, callable by anyone, keeps a stream alive 1.3 days past its end.</p>
+      </article>
+      <article class="card">
+        <p class="figure">5 vs 3</p>
+        <p class="meta">ttl-archival · seed 3</p>
+        <p>After a quiet quarter, one <code>withdraw_many</code> restores 5 archived entries against a budget of 3, a threshold the suite sets.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="testnet" aria-labelledby="testnet-title">
+  <div class="wrap">
+    <h2 id="testnet-title">Testnet evidence</h2>
+    <p class="lead">The shrunk bypass replayed on Stellar Testnet through the real OpenZeppelin smart account, signed by the agent's Ed25519 key: 147 USDC in 3 537 ledgers (about 4.9 hours), all accepted by the on-chain policies.</p>
+    <ul class="txs">
+      <li><b>Payment 1</b><span>49 USDC, ledger 5383703</span><a href="https://stellar.expert/explorer/testnet/tx/b5ea44983473462379a6909abc335105a040f6d4fee83908cf97dee49cec6772">b5ea4498…6772</a></li>
+      <li><b>Payment 2</b><span>49 USDC, ledger 5383715</span><a href="https://stellar.expert/explorer/testnet/tx/82be1eb8d373bf91aecc9ca4743041ea1f50d1961f7b5fb7ba7a3f9add1e5608">82be1eb8…5608</a></li>
+      <li><b>Payment 3</b><span>49 USDC, ledger 5387240</span><a href="https://stellar.expert/explorer/testnet/tx/3f30f306985585ff62b31271f7aa050a26ec82f6458925d17aa5c32ce157aa8e">3f30f306…aa8e</a></li>
+    </ul>
+    <p>All seven contracts and five transactions are listed under <a href="/docs/testnet-evidence.html">Testnet evidence</a> in the docs.</p>
+  </div>
+</section>
+
+<section id="quick-start" aria-labelledby="quick-title">
+  <div class="wrap">
+    <h2 id="quick-title">Quick start</h2>
+    <p class="lead">Rust stable with the <code>wasm32v1-none</code> target and the Stellar CLI; see <a href="/docs/getting-started.html">Getting started</a>.</p>
+<pre><code>git clone https://github.com/Belvast-Innovation/Breakwater
+cd Breakwater
+cargo build --workspace
+
+<span class="comment"># Run the bundled demos (each drives `cargo test --test suite` in the example crate)</span>
+cargo run -p breakwater-cli -- run examples/policy-bypass --seed 7
+cargo run -p breakwater-cli -- run examples/ttl-archival --seed 11
+
+<span class="comment"># Export the shrunk failure as a regression test and render a report</span>
+cargo run -p breakwater-cli -- export examples/policy-bypass --seed 7 --out examples/policy-bypass/tests/repro_policy_bypass_7.rs
+cargo run -p breakwater-cli -- run examples/policy-bypass --seed 7 --json run.json
+cargo run -p breakwater-cli -- report run.json --html report.html</code></pre>
+  </div>
+</section>
+
+<section id="roadmap" aria-labelledby="roadmap-title">
+  <div class="wrap">
+    <h2 id="roadmap-title">Roadmap</h2>
+    <p class="lead">Near term. The full list is in the <a href="/docs/roadmap.html">docs</a>.</p>
+    <ul class="roadmap">
+      <li>Rule-rotation probe for <code>policy-bypass</code>: generate <code>remove_context_rule</code> + <code>add_context_rule</code> under real auth, since a re-created rule starts <code>SpendingLimit</code> with an empty history</li>
+      <li>Malicious keep-alive: bias generators toward unbounded <code>extend_ttl</code> calls on every public entry point, building on <code>NoUnboundedTtlExtension</code></li>
+      <li>Restoration-cost budget as a CI gate: per-step resource ceilings from <code>RestoreCostWithinBudget</code>, compared run over run</li>
+      <li>Export of <code>stellar-cli</code> replay scripts and unsigned transaction XDR next to the Rust reproduction</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<div class="pixels" aria-hidden="true"></div>
+<footer>
+  <div class="wrap">
+    <nav aria-label="Footer">
+      <ul>
+        <li><a href="https://belvast.de">Belvast Innovation</a></li>
+        <li><a href="https://belvast.de/impressum/" lang="de">Impressum</a></li>
+        <li><a href="https://belvast.de/datenschutz/" lang="de">Datenschutz</a></li>
+        <li><a href="https://github.com/Belvast-Innovation/Breakwater">GitHub</a></li>
+        <li><a href="https://github.com/Belvast-Innovation/Breakwater/blob/main/LICENSE">Apache-2.0</a></li>
+      </ul>
+    </nav>
+    <p>Built at HackMeridian 2026, Lisbon.</p>
+    <p>Logo generated with Google Nano Banana; demo narration synthesised with ElevenLabs from the author's own voice.</p>
+  </div>
+</footer>
+
+<script>
+  // Insert the Vimeo player only when asked: no request goes to Vimeo before the click.
+  document.getElementById("video-play").addEventListener("click", function () {
+    var frame = document.createElement("iframe");
+    frame.src = "https://player.vimeo.com/video/1239334137?dnt=1&autoplay=1";
+    frame.title = "Breakwater demo video";
+    frame.allow = "autoplay; fullscreen; picture-in-picture";
+    frame.allowFullscreen = true;
+    var box = document.getElementById("video");
+    box.replaceChildren(frame);
+    frame.focus();
+  });
+</script>
+</body>
+</html>

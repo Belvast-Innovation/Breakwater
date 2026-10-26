@@ -1,0 +1,23 @@
+[book]
+title = "Breakwater"
+description = "Documentation for Breakwater, Foundry-style invariant fuzzing for Soroban."
+authors = ["Belvast Innovation"]
+language = "en"
+src = "src"
+
+[build]
+create-missing = false
+
+# Chapters include README.md and docs/*.md unchanged; this rewrites their repository-relative
+# links to the matching chapter or to the file on GitHub.
+[preprocessor.repo-links]
+command = "python3 repo-links.py"
+after = ["links"]
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+site-url = "/docs/"
+git-repository-url = "https://github.com/Belvast-Innovation/Breakwater"
+additional-css = ["theme/breakwater.css"]
+additional-js = ["theme/breakwater.js"]

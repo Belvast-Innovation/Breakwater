@@ -171,6 +171,7 @@ The usage profile is what makes the pack bite. The demo `Env` sets the minimum p
 
 ## 6. CLI
 
+<!-- ANCHOR: cli -->
 ```
 breakwater run    <suite-dir> [--seed N] [--steps A..=B] [--auth mock|real] [--json <file>] [--no-color]
 breakwater export <suite-dir> --out <file.rs> [--seed N] [--from <run.json>]
@@ -184,6 +185,7 @@ breakwater report <run.json> [--html <file>]
 `report` renders a JSON report in the terminal, and with `--html` writes a single static page (inline CSS and SVG, no scripts, no external resources): header, step timeline over ledger sequence with the violating step highlighted, per-step table, and a cumulative-spend chart with the limit line for `rolling_cap` or a TTL-over-ledgers chart with the zero line for `no_mid_lifecycle_expiry`. `docs/reports/` holds one page per demo.
 
 Exit codes: `0` all invariants held, `1` violation found, `2` usage or configuration error (bad arguments, no `tests/suite.rs`, cargo failed without writing a report). The JSON report is the `RunReport` structure and is stable for CI consumption.
+<!-- ANCHOR_END: cli -->
 
 ## 7. Stellar features exercised
 

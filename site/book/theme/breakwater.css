@@ -1,0 +1,35 @@
+/* Breakwater accents on mdBook's navy and coal themes: the deck's yellow for links and
+   the active chapter, the logo's cyan for inline code. */
+.navy, .coal {
+    --links: #fdda24;
+    --sidebar-active: #fdda24;
+    --inline-code-color: #5ef6f7;
+    --quote-border: #fdda24;
+}
+
+.navy .content a:hover, .coal .content a:hover {
+    text-decoration: underline;
+}
+
+.menu-title {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.content pre.mermaid {
+    background: transparent;
+    text-align: center;
+}
+
+.breakwater-home {
+    margin-inline-end: 12px;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 1.4rem;
+    color: var(--icons);
+    text-decoration: none;
+}
+
+.breakwater-home:hover {
+    color: var(--icons-hover);
+}
