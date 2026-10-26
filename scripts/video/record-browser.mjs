@@ -14,9 +14,14 @@ const ROOT = process.cwd();
 const RAW = join(ROOT, "breakwater-out/video/raw");
 const SIZE = { width: 1920, height: 1080 };
 
+// Author names appear in GitHub's latest-commit bar and contributors list; they are hidden.
+const GITHUB_CSS = `a[href="/hannesgao"], a[href^="/hannesgao?"], img[alt="@hannesgao"], img[alt="hannesgao"],
+  [data-testid="author-avatar"], [data-testid="latest-commit"] a[href*="/commits?author"],
+  .BorderGrid-row:has(a[href$="/graphs/contributors"]) { visibility: hidden !important; }`;
+
 const TARGETS = {
-  // Segment 04: scroll to the violation chart, zoom in on the spend crossing the limit,
-  // then move to the failing step (#2) in the step table. See findingsTour below.
+  // Segment 04: scroll to the violation chart, then to the failing step (#2) in the step
+  // table. See findingsTour below.
   "report-policy-bypass-findings": {
     url: pathToFileURL(resolve(ROOT, "docs/reports/policy-bypass-seed-7.html")).href,
     zoom: 2, hold: 1000, tour: "findings",
@@ -33,13 +38,17 @@ const TARGETS = {
     url: "https://stellar.expert/explorer/testnet/tx/3f30f306985585ff62b31271f7aa050a26ec82f6458925d17aa5c32ce157aa8e",
     zoom: 1.5, hold: 10000, scrollSeconds: 9, settle: 6000,
   },
+  // Segment 01: the README's Problem section on GitHub, scrolled slowly from its heading.
+  "readme-problem": {
+    url: "https://github.com/Belvast-Innovation/Breakwater",
+    zoom: 1.25, hold: 1500, scrollSeconds: 13, settle: 3000,
+    anchor: "#user-content-problem", scrollPx: 900,
+    css: GITHUB_CSS,
+  },
   github: {
     url: "https://github.com/Belvast-Innovation/Breakwater",
     zoom: 1.25, hold: 3000, scrollSeconds: 19, settle: 3000,
-    // Author names appear in the latest-commit bar and the contributors list.
-    css: `a[href="/hannesgao"], a[href^="/hannesgao?"], img[alt="@hannesgao"], img[alt="hannesgao"],
-          [data-testid="author-avatar"], [data-testid="latest-commit"] a[href*="/commits?author"],
-          .BorderGrid-row:has(a[href$="/graphs/contributors"]) { visibility: hidden !important; }`,
+    css: GITHUB_CSS,
   },
 };
 
@@ -62,7 +71,17 @@ for (const name of wanted) {
   await page.goto(t.url, { waitUntil: "load", timeout: 60000 });
   if (t.settle) await page.waitForTimeout(t.settle);
   if (t.css) await page.addStyleTag({ content: t.css });
-  await page.evaluate((z) => { document.documentElement.style.zoom = String(z); }, t.zoom);
+  // Instant scrolling: a page's own smooth scrolling would fight the animation below.
+  await page.evaluate((z) => {
+    document.documentElement.style.zoom = String(z);
+    document.documentElement.style.scrollBehavior = "auto";
+  }, t.zoom);
+  if (t.anchor) {
+    await page.evaluate((sel) => {
+      document.querySelector(sel).scrollIntoView({ block: "start" });
+      window.scrollBy(0, -60);
+    }, t.anchor);
+  }
   await page.waitForTimeout(500);
   // Everything before this point is page loading; make-segments.sh cuts it off.
   const start = (Date.now() - t0) / 1000;
@@ -71,7 +90,7 @@ for (const name of wanted) {
   if (t.tour === "findings") {
     await page.evaluate(findingsTour);
   } else {
-    await scrollToBottom(page, t.scrollSeconds);
+    await scrollDown(page, t.scrollSeconds, t.scrollPx);
   }
   await page.waitForTimeout(2000);
   const length = (Date.now() - t0) / 1000 - start;
@@ -85,24 +104,26 @@ for (const name of wanted) {
 }
 await browser.close();
 
-// Ease-in-out scroll to the bottom, animated inside the page so it runs in real time.
-async function scrollToBottom(page, seconds) {
-  await page.evaluate((ms) => new Promise((done) => {
+// Ease-in-out scroll, animated inside the page so it runs in real time: by `px` from the
+// current position, or to the bottom of the page when `px` is not given.
+async function scrollDown(page, seconds, px) {
+  await page.evaluate(([ms, px]) => new Promise((done) => {
     const el = document.scrollingElement || document.documentElement;
-    const distance = Math.max(0, el.scrollHeight - window.innerHeight);
+    const from = el.scrollTop;
+    const distance = px ?? Math.max(0, el.scrollHeight - window.innerHeight - from);
     const begin = performance.now();
     const step = (now) => {
       const x = Math.min(1, (now - begin) / ms);
-      el.scrollTop = distance * (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+      el.scrollTop = from + distance * (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
       if (x < 1) requestAnimationFrame(step); else done();
     };
     requestAnimationFrame(step);
-  }), seconds * 1000);
+  }), [seconds * 1000, px ?? null]);
 }
 
-// Runs inside the policy-bypass report (about 23 s): scroll to the violation chart, zoom in
-// on the cumulative spend crossing the 100 limit, zoom out, then scroll to the failing step
-// (#2) in the step table, highlight it and push in slowly. Every phase moves; nothing freezes.
+// Runs inside the policy-bypass report (about 23 s): scroll to the violation chart and stay
+// there, then scroll to the failing step (#2) in the step table and highlight it. Scrolling
+// only; no zoom, which makes the picture shimmer.
 async function findingsTour() {
   const ease = (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
   const animate = (ms, f) => new Promise((done) => {
@@ -124,25 +145,14 @@ async function findingsTour() {
     const to = Math.max(0, Math.min(el.scrollHeight - innerHeight, target * zoom - innerHeight * fraction));
     return animate(ms, (x) => { el.scrollTop = from + (to - from) * x; });
   };
-  const scale = (from, to, ms) => animate(ms, (x) => { body.style.transform = `scale(${from + (to - from) * x})`; });
   const pageY = (node) => node.getBoundingClientRect().top / zoom + el.scrollTop / zoom;
 
   // 1. The violation chart, in the middle of the screen.
   const chart = document.querySelector('svg[aria-label="cumulative spend"]');
   await scrollTo(pageY(chart) + chart.getBoundingClientRect().height / zoom / 2, 0.5, 2500);
-  await new Promise((r) => setTimeout(r, 800));
+  await new Promise((r) => setTimeout(r, 9300));
 
-  // 2. Zoom in on where the spend line crosses the limit line (viewBox x 48..300, y 30..180).
-  const box = chart.getBoundingClientRect();
-  const vx = 110, vy = 92;
-  const ox = (box.left + (box.width * vx) / 760) / zoom - body.getBoundingClientRect().left / zoom;
-  const oy = pageY(chart) + (box.height * vy) / 200 / zoom - pageY(body);
-  body.style.transformOrigin = `${ox}px ${oy}px`;
-  await scale(1, 2.6, 2500);
-  await scale(2.6, 2.9, 4500);
-  await scale(2.9, 1, 1500);
-
-  // 3. The failing step in the step table: highlight it and push in slowly.
+  // 2. The failing step in the step table, highlighted.
   const row = document.querySelector("tr.fail");
   await scrollTo(pageY(row), 0.5, 2000);
   row.style.transition = "background-color 600ms, outline-color 600ms";
@@ -151,7 +161,5 @@ async function findingsTour() {
   await new Promise((r) => setTimeout(r, 50));
   row.style.backgroundColor = "rgba(248, 81, 73, 0.18)";
   row.style.outlineColor = "#f85149";
-  const rb = row.getBoundingClientRect();
-  body.style.transformOrigin = `${(rb.left + rb.width / 2) / zoom - body.getBoundingClientRect().left / zoom}px ${pageY(row) - pageY(body)}px`;
-  await scale(1, 1.6, 9000);
+  await new Promise((r) => setTimeout(r, 9000));
 }
