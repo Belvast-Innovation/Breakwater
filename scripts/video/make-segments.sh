@@ -9,8 +9,8 @@
 # use under breakwater-out/video/node.
 #
 # Each picture is made at least as long as its narration (breakwater-out/video/voice/segNN.*,
-# plus 0.5 s; an estimate when there is none yet) so that assemble.sh never has to hold a
-# frame. Stills and the ends of terminal recordings get a slow push-in instead of a freeze.
+# plus 0.5 s; an estimate when there is none yet), so that assemble.sh does not have to
+# stretch or pad it. There are no zoom effects: they make the picture shimmer.
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
@@ -35,23 +35,18 @@ target() { # NN fallback-seconds: narration length + 0.5 s, or the fallback
   done
   echo "$2"
 }
-# Slow push-in over the whole clip, towards (fx, fy) as fractions of the frame. The input
-# is upscaled first so the zoom does not jitter.
-pushin() { # zoom fx fy
-  echo "scale=3840:2160,zoompan=z='1+($1-1)*on/(FRAMES-1)':x='(iw-iw/zoom)*$2':y='(ih-ih/zoom)*$3':d=1:s=1920x1080:fps=30,format=yuv420p"
+still() { # png seconds out
+  enc -loop 1 -framerate 30 -t "$2" -i "$1" -vf "scale=1920:1080,format=yuv420p" "${VOPTS[@]}" "$3"
 }
-still() { # png seconds out zoom fx fy
-  local frames vf
-  frames=$("$PYTHON" -c 'import sys; print(int(float(sys.argv[1]) * 30))' "$2")
-  vf=$(pushin "$4" "$5" "$6"); vf=${vf//FRAMES/$frames}
-  enc -loop 1 -framerate 30 -t "$2" -i "$1" -vf "scale=1920:1080,$vf" "${VOPTS[@]}" "$3"
+highlighted() { # png seconds out overlay start: a still with a highlight box fading in at `start`
+  enc -loop 1 -framerate 30 -t "$2" -i "$1" -loop 1 -framerate 30 -t "$2" -i "$4" \
+    -filter_complex "[0:v]scale=1920:1080,setsar=1[b];[1:v]format=rgba,fade=t=in:st=$5:d=0.4:alpha=1[h];[b][h]overlay=0:0,format=yuv420p" \
+    "${VOPTS[@]}" "$3"
 }
-moving() { # in seconds out zoom fx fy: hold the last frame up to `seconds`, push in throughout
-  local frames vf pad
-  frames=$("$PYTHON" -c 'import sys; print(int(float(sys.argv[1]) * 30))' "$2")
+hold() { # in seconds out: the clip, holding its last frame up to `seconds`
+  local pad
   pad=$("$PYTHON" -c 'import sys; print(max(0.0, float(sys.argv[2]) - float(sys.argv[1])) + 0.1)' "$(dur "$1")" "$2")
-  vf=$(pushin "$4" "$5" "$6"); vf=${vf//FRAMES/$frames}
-  enc -i "$1" -vf "fps=30,scale=1920:1080,setsar=1,tpad=stop_mode=clone:stop_duration=$pad,trim=duration=$2,$vf" "${VOPTS[@]}" "$3"
+  enc -i "$1" -vf "fps=30,scale=1920:1080,setsar=1,tpad=stop_mode=clone:stop_duration=$pad,trim=duration=$2,format=yuv420p" "${VOPTS[@]}" "$3"
 }
 
 echo "== build the CLI and the example tests (so no compiler output reaches the terminal recordings)"
@@ -62,6 +57,7 @@ echo "== terminal segments (vhs)"
 vhs scripts/video/policy-bypass.tape
 vhs scripts/video/ttl-archival.tape
 vhs scripts/video/ttl-tests.tape
+vhs scripts/video/export.tape
 rm -rf /tmp/breakwater-demo
 
 echo "== counts for the segment 09 card, as of now (the GitHub page is recorded right after)"
@@ -74,15 +70,12 @@ echo "$BREAKWATER_COUNTS"
 echo "== stills"
 "$PYTHON" scripts/video/stills.py
 
-# Segment 01: the cover, then the slide that the narration opens with (page 3).
-T01=$(target 01 28)
-still "$STILLS/deck-1.png" 6 "$RAW/seg01-cover.mp4" 1.06 0.5 0.5
-still "$STILLS/deck-3.png" "$("$PYTHON" -c "print($T01 - 6)")" "$RAW/seg01-gap.mp4" 1.15 0.2 0.35
-enc -i "$RAW/seg01-cover.mp4" -i "$RAW/seg01-gap.mp4" \
-  -filter_complex "[0:v][1:v]concat=n=2:v=1:a=0[v]" -map "[v]" "${VOPTS[@]}" "$SEG/seg01.mp4"
-still "$STILLS/deck-5.png" 7 "$RAW/seg04-deck.mp4" 1.08 0.5 0.4
-still "$STILLS/code-repro.png" "$(target 06 15)" "$SEG/seg06.mp4" 1.2 0.1 0.2
-still "$STILLS/deck-7.png" "$(target 10 9)" "$RAW/seg10-plain.mp4" 1.08 0.5 0.5
+# Stills are shown for at most about 9 s, each with a highlight box on the part the narration
+# is about; the rest of each segment is a recording.
+still "$STILLS/deck-1.png" 3 "$RAW/seg01-cover.mp4"
+highlighted "$STILLS/deck-3.png" 9 "$RAW/seg01-pmf.mp4" "$STILLS/hl-pmf.png" 1.0
+highlighted "$STILLS/deck-5.png" 7 "$RAW/seg04-deck.mp4" "$STILLS/hl-findings.png" 1.0
+highlighted "$STILLS/deck-7.png" "$(target 10 9)" "$RAW/seg10-plain.mp4" "$STILLS/hl-team.png" 1.5
 # Segment 10: the team slide with the narration credit in the top right, below the header bar.
 enc -i "$RAW/seg10-plain.mp4" -i "$STILLS/voice-caption.png" \
   -filter_complex "[0:v][1:v]overlay=W-w-60:96" "${VOPTS[@]}" "$SEG/seg10.mp4"
@@ -112,6 +105,7 @@ webm() { # name out: drop the page-load lead-in recorded in name.json
   length=$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["length"])' "$RAW/$1.json")
   enc -ss "$start" -t "$length" -i "$RAW/$1.webm" -vf "scale=1920:1080,fps=30,format=yuv420p" "${VOPTS[@]}" "$2"
 }
+webm readme-problem "$RAW/readme-problem.mp4"
 webm report-policy-bypass "$SEG/seg05.mp4"
 webm report-policy-bypass-findings "$RAW/seg04-report.mp4"
 webm report-ttl-archival "$RAW/report-ttl-archival.mp4"
@@ -121,22 +115,33 @@ webm github "$RAW/github.mp4"
 enc -i "$RAW/github.mp4" -i "$STILLS/stats-card.png" \
   -filter_complex "[0:v][1:v]overlay=W-w-60:140:enable='gte(t,1)'" "${VOPTS[@]}" "$SEG/seg09.mp4"
 
+# Segment 01: the cover, the PMF slide (whose subtitle is the narration's first sentence), then
+# the README's Problem section on GitHub.
+hold "$RAW/readme-problem.mp4" "$("$PYTHON" -c "import sys; print(max(float(sys.argv[1]) - 12, float(sys.argv[2])))" "$(target 01 28)" "$(dur "$RAW/readme-problem.mp4")")" "$RAW/seg01-readme.mp4"
+enc -i "$RAW/seg01-cover.mp4" -i "$RAW/seg01-pmf.mp4" -i "$RAW/seg01-readme.mp4" \
+  -filter_complex "[0:v]setsar=1[a];[1:v]setsar=1[b];[2:v]setsar=1[c];[a][b][c]concat=n=3:v=1:a=0[v]" \
+  -map "[v]" "${VOPTS[@]}" "$SEG/seg01.mp4"
+
+# Segment 06: the export terminal, its last frame held to the narration length.
+mv "$SEG/seg06.mp4" "$RAW/seg06.mp4"
+hold "$RAW/seg06.mp4" "$("$PYTHON" -c "import sys; print(max(float(sys.argv[1]), float(sys.argv[2])))" "$(target 06 15)" "$(dur "$RAW/seg06.mp4")")" "$SEG/seg06.mp4"
+
 # Segment 04: the findings slide, then the report tour (chart crossing the limit, step #2).
 enc -i "$RAW/seg04-deck.mp4" -i "$RAW/seg04-report.mp4" \
   -filter_complex "[0:v]setsar=1[a];[1:v]setsar=1[b];[a][b]concat=n=2:v=1:a=0[v]" -map "[v]" "${VOPTS[@]}" "$SEG/seg04.mp4"
 
 # Segment 07: the terminal run, the report's TTL chart, then the tests for the other two
-# invariants. The terminal recordings push in towards their output so their ends do not freeze.
-moving "$SEG/seg07a.mp4" "$(dur "$SEG/seg07a.mp4")" "$RAW/seg07a.mp4" 1.15 0 0.1
-moving "$SEG/seg07c.mp4" "$(dur "$SEG/seg07c.mp4")" "$RAW/seg07c.mp4" 1.3 0 0.05
+# invariants.
+hold "$SEG/seg07a.mp4" "$(dur "$SEG/seg07a.mp4")" "$RAW/seg07a.mp4"
+hold "$SEG/seg07c.mp4" "$(dur "$SEG/seg07c.mp4")" "$RAW/seg07c.mp4"
 enc -i "$RAW/seg07a.mp4" -i "$RAW/report-ttl-archival.mp4" -i "$RAW/seg07c.mp4" \
   -filter_complex "[0:v]setsar=1[a];[1:v]setsar=1[b];[2:v]setsar=1[c];[a][b][c]concat=n=3:v=1:a=0[v]" \
   -map "[v]" "${VOPTS[@]}" "$SEG/seg07.mp4"
 rm -f "$SEG/seg07a.mp4" "$SEG/seg07c.mp4"
-# Segment 03: the terminal recording, held to the narration length with a push-in.
+# Segment 03: the terminal recording, its last frame held to the narration length.
 mv "$SEG/seg03.mp4" "$RAW/seg03.mp4"
 T03=$("$PYTHON" -c "import sys; print(max(float(sys.argv[1]), float(sys.argv[2])))" "$(target 03 15)" "$(dur "$RAW/seg03.mp4")")
-moving "$RAW/seg03.mp4" "$T03" "$SEG/seg03.mp4" 1.15 0 0.1
+hold "$RAW/seg03.mp4" "$T03" "$SEG/seg03.mp4"
 
 echo "== segments"
 for f in "$SEG"/seg*.mp4; do

@@ -2,7 +2,7 @@
 
 Storyboard and narration for the HackMeridian submission video: 1920×1080, 30 fps, H.264 + AAC, about three minutes. Every number in the narration is listed with its source in [`docs/PITCH_DECK.md`](PITCH_DECK.md).
 
-The video is assembled by the scripts in [`scripts/video/`](../scripts/video/); see "Producing the video" at the end. Each segment's picture is made as long as its narration, so the narration sets the pace. No still image is held for more than 8 seconds without a slow push-in, and the end of every terminal recording pushes in towards its output instead of freezing.
+The video is assembled by the scripts in [`scripts/video/`](../scripts/video/); see "Producing the video" at the end. Each segment's picture is made as long as its narration, so the narration sets the pace. There are no zoom effects. Deck slides are shown for at most about 9 seconds, each with a highlight box fading in on the part the narration is about; everything else is a screen recording (terminal, report, GitHub, stellar.expert), and the long code image scrolls.
 
 AI-assisted production (same statement as the README's "AI-assisted development" table): narration synthesised with ElevenLabs from a clone of the author's own voice (created with his consent); video assembled by scripts (`scripts/video/`). Human contribution: script, voice sample, review of every segment.
 
@@ -10,8 +10,8 @@ The narration format below is parsed by `scripts/video/assemble.sh`: each segmen
 
 ## 01 · The gap
 
-- Picture: deck cover (page 1 of `docs/deck/breakwater-pitch.pdf`) for 6 s, then the PMF slide (page 3), which opens with the same sentence as the narration; both with a slow push-in.
-- Source: `scripts/video/stills.py` (PDF pages 1 and 3)
+- Picture: deck cover (page 1 of `docs/deck/breakwater-pitch.pdf`) for 3 s; the PMF slide (page 3) for 9 s, whose subtitle is the narration's first sentence, with a highlight box on it; then the README's Problem section on GitHub, scrolling slowly.
+- Source: `scripts/video/stills.py` (PDF pages 1 and 3, `hl-pmf.png`), then `scripts/video/record-browser.mjs` (`readme-problem`)
 
 Narration: Soroban already has static analysis, AI review and formal verification. What it doesn't have is a reusable stateful fuzzer. That gap matters now: AI agents pay on Stellar through x402 and MPP, guarded only by smart-account policies, and contract state expires under TTL archival. Both break across many transactions, not one. Breakwater is that missing layer.
 
@@ -31,8 +31,8 @@ Narration: First demo: an OpenZeppelin smart account with an agent key. The agen
 
 ## 04 · Correct code, wrong configuration
 
-- Picture: deck slide 5, Findings (page 5 of the PDF), for 7 s with a push-in; then `docs/reports/policy-bypass-seed-7.html`: scroll to the violation chart, zoom in on the cumulative spend crossing the limit of 100, zoom out, scroll to the failing step #2 in the step table, highlight it and push in.
-- Source: `scripts/video/stills.py` (PDF page 5), then `scripts/video/record-browser.mjs` (`report-policy-bypass-findings`)
+- Picture: deck slide 5, Findings (page 5 of the PDF), for 7 s with a highlight box on the misconfigured window; then `docs/reports/policy-bypass-seed-7.html`: scroll to the violation chart, where the cumulative spend crosses the limit of 100, then to the failing step #2 in the step table, which is highlighted.
+- Source: `scripts/video/stills.py` (PDF page 5, `hl-findings.png`), then `scripts/video/record-browser.mjs` (`report-policy-bypass-findings`)
 
 Narration: To be clear: the policy code is correct, and this is not an OpenZeppelin bug. The configuration is wrong: the daily window was set to 1,728 ledgers instead of 17,280. The third payment lands exactly one window after the first, so the policy has already forgotten it. Every single payment passes, yet the sequence spends 147 USDC in a day against a cap of 100. Over a full day, that is up to ten times the limit.
 
@@ -45,8 +45,8 @@ Narration: Breakwater report turns the run into one static HTML page. The shrunk
 
 ## 06 · A regression test for free
 
-- Picture: the exported reproduction, `examples/policy-bypass/tests/repro_policy_bypass_7.rs`, rendered as code.
-- Source: `scripts/video/stills.py`
+- Picture: terminal: `breakwater export examples/policy-bypass --seed 7`, the first lines of the exported test (what it replays and asserts), then `cargo test` running the committed copy, `repro_policy_bypass_7`, which passes.
+- Source: `scripts/video/export.tape`
 
 Narration: Breakwater export writes the shrunk sequence as a Rust test. It replays the exact steps and asserts the same invariant fails at the same step. Commit it, and this bug can't come back quietly.
 
@@ -73,8 +73,8 @@ Narration: All of this was built during the event, every change through a pull r
 
 ## 10 · Where to find it
 
-- Picture: deck slide 7, The Team, with the repository QR code (page 7 of the PDF), and a small caption in the top right: "Narration: ElevenLabs voice clone of the author's own voice."
-- Source: `scripts/video/stills.py` (PDF page 7)
+- Picture: deck slide 7, The Team, with the repository QR code (page 7 of the PDF), with a highlight box on the QR code and the repository address, and a small caption in the top right: "Narration: ElevenLabs voice clone of the author's own voice."
+- Source: `scripts/video/stills.py` (PDF page 7, `hl-team.png`)
 
 Narration: I'm Hannes Gao, Belvast Innovation. Breakwater is open source under Apache 2.0, and the repository is on screen. Thanks for watching.
 
