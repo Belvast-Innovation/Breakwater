@@ -16,7 +16,8 @@
 //!   samples into a [`BudgetReport`].
 //! - [`digest::fnv1a64`]: the digest that identifies the generated workload.
 //! - [`compare()`]: a fresh measurement against a stored suite, within a
-//!   [`Tolerance`].
+//!   [`Tolerance`]. [`compare_tiered`] does the same with a [`Tolerances`],
+//!   which can differ per [`ResourceClass`] or per resource.
 //!
 //! See `docs/ARCHITECTURE.md` §5.
 #![deny(unsafe_code)]
@@ -31,7 +32,8 @@ mod snapshot;
 mod stats;
 
 pub use compare::{
-    compare, Comparison, Finding, SampleChange, StatKind, Tolerance, ToleranceError, Verdict,
+    compare, compare_tiered, Comparison, Finding, SampleChange, StatKind, Tolerance,
+    ToleranceError, ToleranceSource, Tolerances, TolerancesError, Verdict,
 };
 pub use record::{Metered, RecordOnly, Recorder, Target};
 pub use report::{BudgetError, BudgetReport, REPORT_ENV};
