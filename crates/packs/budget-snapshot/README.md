@@ -46,7 +46,7 @@ breakwater snapshot path/to/suite --check --tolerance 0%
 
 `--check` replays the seed, step range and authorization mode stored in the snapshot. It exits `0` when every value is within the tolerance (default `5%`), `1` on a regression, and `2` on a usage or configuration error, which includes a missing, malformed or stale snapshot (other `soroban-sdk` or `soroban-env-host` version, other seed, step range, authorization or metering mode, or a changed generated workload).
 
-The measured call must be the last top-level call the handler makes, because the host reports only the last one. A handler that calls the contract again afterwards makes the measurement fail instead of being misread. Failed calls are not measured.
+The measured call must be the last top-level call the handler makes, because the host reports only the last one. A handler that calls the contract again afterwards makes the measurement fail instead of being misread, and so does one that reports success without calling the contract at all. Failed calls are not measured.
 
 ## What the numbers mean
 
@@ -56,6 +56,12 @@ The snapshot's `mode` is `native`: the contract runs as Rust code in the test ho
 - **`instructions` and `mem_bytes` are relative only.** They leave out Wasm instantiation and VM execution. Use them to compare one revision of the same code base with another, never as an on-chain fee.
 - **No figure includes the transaction's own size.**
 - **A snapshot is the distribution a seed generates**, not an upper bound on what a handler can cost.
+
+### What depends on what
+
+- **Storage-related figures follow the call's own footprint.** `write_entries`, `write_bytes`, `disk_read_entries`, `disk_read_bytes`, `memory_read_entries`, event size and rent do not change when other entries exist in the test ledger.
+- **`instructions` and `mem_bytes` also follow the history.** The test host keeps every entry the `Env` has touched in an ordered map that is copied on every write, so a call costs more the more entries were touched before it: about 280 instructions per touched entry for a call that writes one entry, roughly 2,100 to 2,600 for one that writes five. Entries written by setup, earlier steps or another contract count, persistent or temporary, and so do the nonce entries mocked authorization creates for each authorized call. Entries that exist only in the ledger snapshot count for nothing until they are touched. A transaction on the network loads only its own footprint into this map, so this part belongs to the test environment, not to the contract.
+- **Reading a 0% result.** A change that adds entries early in a sequence also raises `instructions` and `mem_bytes` of later, untouched handlers by a few percent while their storage figures stay put. The handler whose storage figures moved is the change. A rise in `instructions` or `mem_bytes` alone is worth chasing only if it is large or that handler's code changed. Because of the history effect, changing the seed, the step range or the set of handlers changes the figures; the stored workload digest reports that as a stale snapshot, not as a regression.
 
 The numbers come from the host's cost model, not from a clock, and the generated workload is fixed by the seed. Under the same locked dependencies the figures are identical value for value on any machine; the Breakwater repository's CI verifies it with `--tolerance 0%`.
 

@@ -479,3 +479,75 @@ fn a_target_with_no_function_name_never_matches() {
         other => panic!("expected Unattributed, got {other:?}"),
     }
 }
+
+/// What the figures depend on. The host keeps every ledger entry an `Env` has
+/// touched in a persistent map that each write copies, so the modelled
+/// instructions and memory of a call grow with the number of entries touched
+/// before it. The storage-related figures come from the call's own footprint
+/// and do not. Entries that are only in the ledger snapshot count for nothing
+/// until something touches them.
+#[test]
+fn storage_figures_follow_the_call_while_instructions_follow_the_history() {
+    use soroban_sdk::testutils::EnvTestConfig;
+
+    let read = |env: &Env| {
+        let r = env.host().get_last_invocation_resources().expect("metered");
+        (
+            r.instructions,
+            r.mem_bytes,
+            (
+                r.write_entries,
+                r.write_bytes,
+                r.disk_read_entries,
+                r.memory_read_entries,
+            ),
+        )
+    };
+    // The reading of one `increment` after `touched` unrelated entries were
+    // written into the Env, or into the snapshot the Env is restored from.
+    let after = |n: u32, in_snapshot_only: bool| {
+        let base = Env::default();
+        let id = base.register(Light, ());
+        let strkey = id.to_string().to_string();
+        for start in (0..n).step_by(50) {
+            base.as_contract(&id, || {
+                for i in start..(start + 50).min(n) {
+                    base.storage()
+                        .persistent()
+                        .set(&(symbol_short!("pad"), i), &i);
+                }
+            });
+        }
+        let env = if in_snapshot_only {
+            let mut env = Env::from_ledger_snapshot(base.to_ledger_snapshot());
+            env.set_config(EnvTestConfig {
+                capture_snapshot_at_drop: false,
+            });
+            // An address belongs to the Env that made it: rebuild it.
+            env.register_at(&Address::from_str(&env, &strkey), Light, ());
+            env
+        } else {
+            base
+        };
+        LightClient::new(&env, &Address::from_str(&env, &strkey)).increment();
+        read(&env)
+    };
+
+    let (ins0, mem0, storage0) = after(0, false);
+    let (ins100, mem100, storage100) = after(100, false);
+    let (ins200, _, storage200) = after(200, false);
+    // Touched entries make unrelated calls dearer, steadily. The counter
+    // writes one entry per call, which costs a few hundred instructions per
+    // touched entry; a call that writes more pays proportionally more.
+    assert!(ins100 > ins0 + 100 * 100, "{ins0} -> {ins100}");
+    assert!(mem100 > mem0, "{mem0} -> {mem100}");
+    assert!(ins200 > ins100 + 100 * 100, "{ins100} -> {ins200}");
+    // ... and leave the call's own storage figures exactly as they were.
+    assert_eq!(storage0, storage100);
+    assert_eq!(storage0, storage200);
+    // Entries nobody touched since the restore cost nothing.
+    let (ins_snapshot, mem_snapshot, storage_snapshot) = after(200, true);
+    let (ins_clean, mem_clean, storage_clean) = after(0, true);
+    assert_eq!((ins_snapshot, mem_snapshot), (ins_clean, mem_clean));
+    assert_eq!(storage_snapshot, storage_clean);
+}
