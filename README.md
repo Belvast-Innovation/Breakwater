@@ -472,6 +472,7 @@ Where AI meaningfully generated code or content:
 | Logo | Generated with Google Nano Banana (Gemini image model) from the author's prompt | Concept (a wave breaking on a breakwater tetrapod), selection, cropping |
 | Demo video narration | Narration synthesised with ElevenLabs from a clone of the author's own voice (created with his consent); video assembled by scripts | Script, voice sample, review of every segment |
 | Website and docs site | First draft of the landing page, mdBook configuration and Pages workflow | Content selection, review against README and docs |
+| Release automation (`scripts/release-plan.py`, `.github/workflows/release.yml`, `.claude/skills/release/SKILL.md`) | First drafts of all three files | Decisions, review of the release process design, and verification of the real 0.1.1 release |
 | Documentation | Drafts of README, `docs/`, CI config | All claims checked against the code and Stellar docs |
 
 Stellar documentation was pulled into the AI context through the official **Raven MCP** server and the **Stellar Dev Skill** plugin. All AI-generated code was read, tested and, where needed, rewritten by the team before being committed.
