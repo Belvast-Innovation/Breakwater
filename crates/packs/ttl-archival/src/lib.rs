@@ -15,7 +15,7 @@
 //! - The usage profile that makes the pack bite lives in the core:
 //!   `LedgerAdvance::daily_then_silence`.
 //!
-//! See `docs/ARCHITECTURE.md` §5.
+//! See [the architecture document](https://github.com/Belvast-Innovation/Breakwater/blob/main/docs/ARCHITECTURE.md), section 5.
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 

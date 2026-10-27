@@ -1,12 +1,23 @@
 [package]
-name = "breakwater"
-description = "Foundry-style invariant testing for Soroban: Suite, Handler, Invariant, shrinking and export"
+# Published as `soroban-breakwater` because `breakwater` is taken on crates.io. The library
+# keeps the name `breakwater`, so downstream code still writes `use breakwater::...`.
+name = "soroban-breakwater"
+description = "Foundry-style invariant testing for Soroban: stateful fuzzing, shrinking and regression export"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-publish.workspace = true
+homepage = "https://breakwater.belvast.de"
+documentation = "https://docs.rs/soroban-breakwater"
+readme = "README.md"
+keywords = ["soroban", "stellar", "invariant", "fuzzing", "smart-contracts"]
+categories = ["development-tools::testing", "cryptography::cryptocurrencies"]
+include = ["src/**", "tests/**", "README.md", "LICENSE", "NOTICE"]
+publish = true
+
+[lib]
+name = "breakwater"
 
 [dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

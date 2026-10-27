@@ -12,7 +12,7 @@
 //! - Generators biased toward known bypass shapes: many payments just under a
 //!   cap and ledger gaps that straddle a policy window.
 //!
-//! See `docs/ARCHITECTURE.md` §5.
+//! See [the architecture document](https://github.com/Belvast-Innovation/Breakwater/blob/main/docs/ARCHITECTURE.md), section 5.
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 

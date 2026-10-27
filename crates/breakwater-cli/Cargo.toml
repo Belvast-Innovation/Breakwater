@@ -1,16 +1,25 @@
 [package]
 name = "breakwater-cli"
-description = "Command-line interface for Breakwater: run, export and report"
+description = "Command-line interface for Breakwater, invariant testing for Soroban: run, export and report"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-publish.workspace = true
+homepage = "https://breakwater.belvast.de"
+documentation = "https://docs.rs/breakwater-cli"
+readme = "README.md"
+keywords = ["soroban", "stellar", "invariant", "fuzzing", "smart-contracts"]
+categories = ["development-tools::testing", "command-line-utilities"]
+include = ["src/**", "README.md", "LICENSE", "NOTICE"]
+publish = true
 
 [[bin]]
 name = "breakwater"
 path = "src/main.rs"
+# The binary shares its name with the `breakwater` library of `soroban-breakwater`; without
+# this their rustdoc output collides (rust-lang/cargo#6313). The binary has no public API.
+doc = false
 
 [dependencies]
 breakwater = { workspace = true }
