@@ -64,6 +64,8 @@ The workspace:
 | `example-ed25519-verifier` | `examples/policy-bypass/contracts/ed25519-verifier` | OpenZeppelin Ed25519 verifier as a deployable contract |
 | `example-ttl-archival` | `examples/ttl-archival` | `PaymentStream`, which never extends TTL, and `PaymentStreamFixed` behind the `fixed` feature |
 
+Publishing order. A published crate may only depend on published crates: `soroban-breakwater` (the core package) first, then the three attack packs (`breakwater-pack-policy-bypass`, `breakwater-pack-ttl-archival`, `breakwater-pack-budget-snapshot`), and `breakwater-cli` last. The CLI depends on `breakwater-pack-budget-snapshot` for the snapshot file format and the comparison, so that pack must be on crates.io before the CLI can be published.
+
 Not crates: `scripts/replay-testnet.sh` (Testnet replay, §8) and `docs/reports/` (HTML reports rendered by `breakwater report --html`).
 
 Build the contracts to WASM (needed for Testnet deploys; tests link them natively). This is what CI runs, with warnings denied; a bare `cargo build --target wasm32v1-none` is rejected by `soroban-sdk` 28:

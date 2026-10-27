@@ -34,12 +34,13 @@
 <!-- ANCHOR: intro -->
 Breakwater is a Rust framework and CLI for stateful property testing of Stellar smart contracts. You declare *actors* (who can call), *handlers* (what they can call) and *invariants* (what must always hold). Breakwater generates randomized multi-step transaction sequences against a local Soroban `Env`, checks every invariant after every step, shrinks any failing sequence to its minimal form, and exports it as a reproducible Rust unit test.
 
-It ships with two **attack packs** for risks that are specific to Stellar:
+It ships with three **attack packs** for risks that are specific to Stellar:
 
 | Attack pack | Risk it hunts | Why it matters |
 | --- | --- | --- |
 | `policy-bypass` | Multi-step sequences that slip past OpenZeppelin smart-account policies (spending limits, context rules, signer scopes) | These policies are the safety layer for AI-agent wallets paying over x402 / MPP. A policy that holds for one transaction may fail for five. |
 | `ttl-archival` | Contract state that expires under Soroban's TTL-based state archival while the business logic still depends on it | A one-year payment stream whose storage entry is archived at month six is a correctness bug no EVM tool knows to look for. |
+| `budget-snapshot` | Resource regressions: a change that makes a handler read, write, emit or rent more than before, without breaking any functional test | An extra storage write passes every test and still makes each call dearer. A committed snapshot of per-handler resources turns that into a failing CI check. |
 
 > **Status:** HackMeridian 2026 submission (Genesis path · Stellar Unlocked track). Built 25–26 October 2026 in Lisbon. See [Prior work and hackathon scope](#prior-work-and-hackathon-scope).
 >
@@ -124,6 +125,7 @@ This installs a binary named `breakwater`. To write a suite, add the core librar
 soroban-breakwater = "0.1"
 breakwater-pack-policy-bypass = "0.1"
 breakwater-pack-ttl-archival = "0.1"
+breakwater-pack-budget-snapshot = "0.1"
 ```
 
 The core package is named `soroban-breakwater` because the name `breakwater` is already taken on crates.io. Its library is still called `breakwater`, so in code you write `use breakwater::...`.
@@ -328,13 +330,13 @@ mode: native   tolerance: 5%
 14 value(s) over the tolerance and 0 sample count change(s) in 1 handler(s)
 ```
 
-`create_stream` and `cancel` are not touched by the change and stay silent. `--check` replays the seed, step range and authorization mode stored in the snapshot, so it takes no `--seed`, `--steps` or `--auth`.
+`create_stream` and `cancel` are not touched by the change and stay silent. `--check` replays the seed, step range and authorization mode stored in the snapshot, so it takes no `--seed`, `--steps` or `--auth`. The default tolerance is 5%, which suits local use; this repository's CI uses `--tolerance 0%` as a strict gate.
 
 Exit codes: `0` recorded, or every value within the tolerance (improvements are only reported); `1` a value is over the tolerance, or a handler measured a different number of successful calls under the same workload; `2` usage or configuration error, including a snapshot file that is missing or malformed, and a stale snapshot: other `soroban-sdk` or `soroban-env-host` version, other seed, cases, step range, authorization or metering mode, a changed generated workload (a digest of the executed steps is stored), or a different set of handlers. A stale snapshot is never compared; record it again when the change is intended.
 
 To measure your own suite, add a `breakwater_snapshot` test next to `breakwater_suite` in `tests/suite.rs`: wrap each handler with `Recorder::handler(handler, Target::new(contract, "function"))`, add `recorder.invariant()` (a suite needs at least one), run, then `recorder.finish(&config, &report)` and `write_if_requested()`. The measured call must be the last top-level call the handler makes, because the host reports only the last one; a handler that calls the contract again afterwards makes the measurement fail instead of misreading it. Failed calls are not measured.
 
-What the numbers mean. The snapshot's `mode` is `native`: the contract runs as Rust code in the test host. In this mode the storage-related figures (read and write entries and bytes, event size, rent) follow the contract's behaviour directly, so a new storage write, a larger entry or an extra event shows up as it would on the network. `instructions` and `mem_bytes` leave out Wasm instantiation and VM execution, and no figure includes the transaction's own size: use them only to compare one revision of the same code base with another, never as an on-chain fee. The numbers come from the host's cost model, not from a clock, and the generated workload is fixed by the seed, so a recording is the same bytes on any machine for the same locked dependencies.
+What the numbers mean. The snapshot's `mode` is `native`: the contract runs as Rust code in the test host. In this mode the storage-related figures (read and write entries and bytes, event size, rent) follow the contract's behaviour directly, so a new storage write, a larger entry or an extra event shows up as it would on the network. `instructions` and `mem_bytes` leave out Wasm instantiation and VM execution, and no figure includes the transaction's own size: use them only to compare one revision of the same code base with another, never as an on-chain fee. The numbers come from the host's cost model, not from a clock, and the generated workload is fixed by the seed, so by design a recording is the same bytes on any machine for the same locked dependencies, which CI verifies.
 <!-- ANCHOR_END: attack-packs -->
 
 ## How Stellar is used
@@ -378,10 +380,11 @@ The stream's expiry itself cannot be waited for within the hackathon: Testnet's 
 Breakwater/
 ├── crates/
 │   ├── breakwater/                  # core library: Suite, Handler, Invariant, replay, JSON export
-│   ├── breakwater-cli/              # `breakwater run | export | report`
+│   ├── breakwater-cli/              # `breakwater run | export | report | snapshot`
 │   └── packs/
 │       ├── policy-bypass/           # invariants, generators and real-auth entries for OZ smart accounts
-│       └── ttl-archival/            # TTL probes, stream model and archival invariants
+│       ├── ttl-archival/            # TTL probes, stream model and archival invariants
+│       └── budget-snapshot/         # per-handler resource sampling, snapshot file and regression check
 ├── examples/
 │   ├── policy-bypass/               # DemoAccount: an OZ smart account with a mis-sized spending window
 │   │   ├── contracts/
@@ -391,6 +394,7 @@ Breakwater/
 │   │   └── tests/                   # suite.rs, common/ (fixture, handlers), repro_policy_bypass_7.rs
 │   └── ttl-archival/                # PaymentStream (never extends TTL) and PaymentStreamFixed
 │       └── tests/                   # suite.rs, common/, repro_ttl_archival_11.rs
+├── .breakwater-snapshot.json        # resource baseline of the ttl-archival demo (`breakwater snapshot --check`)
 ├── scripts/
 │   └── replay-testnet.sh            # replays an exported sequence on Testnet
 ├── site/                            # breakwater.belvast.de: landing page, mdBook docs (book/), build.sh
