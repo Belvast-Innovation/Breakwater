@@ -299,6 +299,42 @@ Advances the ledger according to a usage profile (`LedgerAdvance::daily_then_sil
 What expiry means on Soroban since Protocol 23: an archived persistent or instance entry is not lost, and a call that touches it does not simply fail. The next transaction that touches an archived entry must restore it (simulation adds the entry to the transaction's restore list) and pay for the restoration, a transaction built without the restore fails, and a contract that never extends TTL sees the entry archived again after every quiet period of at least the minimum TTL. The pack therefore reads each entry's `live_until` directly from the ledger entries, because any contract read, and the SDK's own `get_ttl` test helper, would restore the entry and hide the finding.
 
 The bundled demo (`examples/ttl-archival`) is a payment stream that keeps streams in persistent storage and never calls `extend_ttl`. Under the profile above, a one-year stream is archived after the quiet quarter with 275 days left to run; `PaymentStreamFixed`, which extends every touched entry to the stream's remaining duration, survives the same profile. Two more suites in `examples/ttl-archival/tests/` drive the other invariants: with seed 5, `NoUnboundedTtlExtension` shrinks to 3 steps in which anyone's call to the unauthenticated `bump_ttl` keeps a stream alive 1.3 days past its end; with seed 3, `RestoreCostWithinBudget` shrinks to 4 steps in which one `withdraw_many` after a quiet quarter reads 5 entries from disk against a budget of 3. That 3 is a threshold the suite sets, not a network limit.
+### `budget-snapshot`
+
+A resource snapshot and CI gate in the spirit of `forge snapshot`. It does not look for a violation: it measures what every handler of a suite costs, stores `max` and `p50` per resource in a file you commit, and fails when a later run is over it. The twelve resources are the ones the host meters per invocation: instructions, memory, disk and in-memory read entries, write entries, read and written bytes, contract event size, and persistent and temporary rent (ledger-bytes and bumped entries).
+
+```bash
+# Record the baseline (writes .breakwater-snapshot.json in the current directory)
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --seed 7
+
+# Check a later run against it: exit 0 within the tolerance, 1 on a regression
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --tolerance 2.5%
+
+# The demo regression: `withdraw` also writes a receipt entry (feature `regress-demo`)
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --features regress-demo
+```
+
+Real output of the last command (abridged), exit code 1:
+
+```
+suite: ttl-archival-budget   seed: 7   cases: 32   steps: 1..=20   auth: mock
+mode: native   tolerance: 5%
+────────────────────────────────────────────────────────────────────────
+  withdraw         instructions                 max       270023 -> 309412         +14.5%  REGRESSION
+  withdraw         write_entries                max            4 -> 5              +25.0%  REGRESSION
+  withdraw         write_bytes                  max          904 -> 1016           +12.3%  REGRESSION
+  withdraw         persistent_entry_rent_bumps  max            2 -> 3              +50.0%  REGRESSION
+14 value(s) over the tolerance and 0 sample count change(s) in 1 handler(s)
+```
+
+`create_stream` and `cancel` are not touched by the change and stay silent. `--check` replays the seed, step range and authorization mode stored in the snapshot, so it takes no `--seed`, `--steps` or `--auth`.
+
+Exit codes: `0` recorded, or every value within the tolerance (improvements are only reported); `1` a value is over the tolerance, or a handler measured a different number of successful calls under the same workload; `2` usage or configuration error, including a snapshot file that is missing or malformed, and a stale snapshot: other `soroban-sdk` or `soroban-env-host` version, other seed, cases, step range, authorization or metering mode, a changed generated workload (a digest of the executed steps is stored), or a different set of handlers. A stale snapshot is never compared; record it again when the change is intended.
+
+To measure your own suite, add a `breakwater_snapshot` test next to `breakwater_suite` in `tests/suite.rs`: wrap each handler with `Recorder::handler(handler, Target::new(contract, "function"))`, add `recorder.invariant()` (a suite needs at least one), run, then `recorder.finish(&config, &report)` and `write_if_requested()`. The measured call must be the last top-level call the handler makes, because the host reports only the last one; a handler that calls the contract again afterwards makes the measurement fail instead of misreading it. Failed calls are not measured.
+
+What the numbers mean. The snapshot's `mode` is `native`: the contract runs as Rust code in the test host. In this mode the storage-related figures (read and write entries and bytes, event size, rent) follow the contract's behaviour directly, so a new storage write, a larger entry or an extra event shows up as it would on the network. `instructions` and `mem_bytes` leave out Wasm instantiation and VM execution, and no figure includes the transaction's own size: use them only to compare one revision of the same code base with another, never as an on-chain fee. The numbers come from the host's cost model, not from a clock, and the generated workload is fixed by the seed, so a recording is the same bytes on any machine for the same locked dependencies.
 <!-- ANCHOR_END: attack-packs -->
 
 ## How Stellar is used
@@ -398,6 +434,7 @@ Where AI meaningfully generated code or content:
 | --- | --- | --- |
 | Core library (`crates/breakwater`) | Boilerplate for trait definitions, `proptest-state-machine` wiring, error types | Design of the `Handler` / `Invariant` / `Suite` API, shrinking strategy, review of every file |
 | Attack packs | First drafts of invariant implementations from written specs | Threat modelling, choice of invariants, verification against real contracts |
+| `budget-snapshot` pack and `breakwater snapshot` | Design proposal, first drafts of the sampling wrapper, statistics, snapshot file model, comparison logic, the `snapshot` command, their tests and this documentation | Decisions on what is measured and how, the file format, exit codes and tolerance semantics; review of the plan and of the diff |
 | Demo contracts | Scaffolding from OpenZeppelin examples | Deliberate misconfigurations, TTL bug |
 | CLI, report output, HTML report and Testnet replay scripts | Argument parsing, report formatting, first drafts of the `run` / `export` / `report` commands, the HTML renderer and `scripts/replay-testnet.sh` | UX decisions, pipeline design (how the CLI drives a suite, how an agent-signed authorization entry is spliced into a transaction), on-chain verification |
 | Logo | Generated with Google Nano Banana (Gemini image model) from the author's prompt | Concept (a wave breaking on a breakwater tetrapod), selection, cropping |
@@ -414,7 +451,7 @@ Stellar documentation was pulled into the AI context through the official **Rave
 
 - Rule-rotation probe for `policy-bypass`: generate `remove_context_rule` + `add_context_rule` under real auth, since a re-created rule starts `SpendingLimit` with an empty history
 - Malicious keep-alive: bias generators toward unbounded `extend_ttl` calls on every public entry point, building on `NoUnboundedTtlExtension`
-- Restoration-cost budget as a CI gate: per-step resource ceilings from `RestoreCostWithinBudget`, compared run over run
+- Done: resource budgets as a CI gate, compared run over run, as the [`budget-snapshot`](#budget-snapshot) pack. Still open: hard per-step ceilings from `RestoreCostWithinBudget` in the same file, and a Wasm metering mode
 - Export of `stellar-cli` replay scripts and unsigned transaction XDR next to the Rust reproduction
 
 **Later**

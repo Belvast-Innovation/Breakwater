@@ -169,6 +169,30 @@ The usage profile is what makes the pack bite. The demo `Env` sets the minimum p
 
 **Real-world precedent.** After the mainnet upgrade to Protocol 23 on 2025-09-03, it was found on 2025-10-09 that Protocol 23 had archived 478 contract entries with stale values; 84 of them had been restored into live state, and 77 entries were modified. Validators paused archival eviction, a stellar-core patch on 2025-10-10 quarantined the affected entries, and Protocol 24 (CAP-0076) on 2025-10-22 fixed the inconsistency ([stellar.org, Addressing state archival inconsistencies](https://www.stellar.org/blog/developers/addressing-state-archival-inconsistencies-protocol-upgrade-vote-next-week)). The archive-and-restore path is where mainnet's most recent real incident happened, and it is exactly the path this pack probes.
 
+### `budget-snapshot`
+
+Target: any suite. Unlike the other two packs this one has no invariant to violate: it measures what each handler costs, stores the statistics in `.breakwater-snapshot.json` and compares a later run with them. `examples/ttl-archival` is the demo (suite `ttl-archival-budget`, seed 7, up to twenty one-day steps so that no call pays for restoring an archived entry), and its `regress-demo` feature adds one persistent write to `withdraw`, the regression the gate is shown to catch.
+
+**The metering layer.** The host meters every top-level invocation separately: when one starts it clears the CPU and memory counters, the events and the storage footprint (the ledger state itself is kept), and when it ends it computes `InvocationResources` for the whole call tree, sub-calls and `__check_auth` included. `env.cost_estimate().resources()` and the host's `get_last_invocation_resources` return only the *last* one, so a reading belongs to the call you meant only if nothing was invoked since. `env.cost_estimate().budget()` is a subset (CPU instructions, peak memory, a per-cost-type tracker) and is not used. Nothing here needs a manual reset, and the runner's `reset_unlimited()` on each restored `Env` only lifts the CPU and memory limits; it neither changes the counts nor disables the separate mainnet `InvocationResourceLimits` every test `Env` enforces, so a call that exceeds those still ends the run as a `panic` violation.
+
+That drives where the reading is taken. Invariants run after the handler and often read the contract through a client, which is an invocation and would overwrite the reading, so sampling cannot live in an invariant. `Metered<H>` wraps a handler, forwards every `Handler` method and, right after the inner `call` returns, reads the last invocation. It records a sample only if the call succeeded and the host says the last top-level invocation was the declared `Target` (contract and function; the comparison is on the derived `Debug` text of the host's description, because that type is not reachable through `soroban-sdk`, and a test pins it). Anything else is counted as unattributed and makes `Recorder::finish` fail, so a helper call after the measured one is refused rather than misread. Setup calls (minting, `register_at` in `on_restore`) happen before the measured call and are overwritten by it; advancing the ledger and signing are not invocations. Samples are grouped by handler name, not by step: a step has no identity across seeds, a handler does. A suite needs one invariant, so `RecordOnly` is provided; if a real invariant fires, the sequences stop early and `finish` refuses the incomplete measurement.
+
+**The file.** Format version 1, only integers, ordered maps, a trailing newline:
+
+| Field | Meaning |
+| --- | --- |
+| `format`, `toolchain` | Layout version and the resolved `soroban-sdk`, `soroban-env-host` and core library versions, read from `cargo metadata`. The cost model is in `soroban-env-host`, so its patch version counts |
+| `suites.<name>` | `seed`, `cases`, `steps`, `auth`, `mode` (`native`) and `workload_digest`, an FNV-1a 64 over every executed `(handler, actor, arguments, ledger sequence)`, whatever the outcome |
+| `handlers.<name>` | `samples` and, for each of the twelve resources, `max` and `p50` (the lower median, `sorted[(n-1)/2]`) |
+
+`snapshot` replaces only its own suite and refuses to relabel other suites in the file with a different toolchain.
+
+**The comparison** (`breakwater_pack_budget_snapshot::compare`). If the toolchain, mode, authorization, seed, cases, step range, workload digest or handler set differ, the snapshot is stale and is not compared. Otherwise each handler's `max` and `p50` must satisfy `current * 10000 <= baseline * (10000 + tolerance_bps)`; a zero baseline allows only zero. Values below the baseline by more than the tolerance are reported as improvements and do not fail. A different sample count under the same workload fails, because a handler whose calls start to fail would otherwise leave the measurement unnoticed. The sequence strategy never reads the `Env`, so for a fixed seed a contract change moves the resource values and nothing else.
+
+**Why a recording is reproducible.** The figures are the host's modelled costs, not timings. The suites register contracts natively, so no Wasm bytecode, and therefore no compiler version or optimisation level, enters the numbers. The workload comes from a seeded ChaCha generator, the test `Env` uses a fixed PRNG seed and counter-based addresses, and the file holds no timestamps, paths or floats.
+
+**Limits.** `native` mode leaves out Wasm instantiation and VM execution, the transaction size and the rent of the Wasm code, so `instructions` and `mem_bytes` are only good for comparing revisions of one code base; the storage figures are exact for the entries the contract touches. The distribution is the one the seed generates, not an upper bound. A Wasm mode would add a `mode` value and measure real bytecode, at the price of numbers that follow the toolchain.
+
 ## 6. CLI
 
 <!-- ANCHOR: cli -->
@@ -176,6 +200,8 @@ The usage profile is what makes the pack bite. The demo `Env` sets the minimum p
 breakwater run    <suite-dir> [--seed N] [--steps A..=B] [--auth mock|real] [--json <file>] [--no-color]
 breakwater export <suite-dir> --out <file.rs> [--seed N] [--from <run.json>]
 breakwater report <run.json> [--html <file>]
+breakwater snapshot <suite-dir> [--seed N] [--steps A..=B] [--auth mock|real] [--file <path>] [--features a,b]
+breakwater snapshot <suite-dir> --check [--tolerance 5%] [--file <path>] [--suite <name>] [--features a,b]
 ```
 
 `run` executes `cargo test --manifest-path <suite-dir>/Cargo.toml --test suite breakwater_suite -- --exact` with `BREAKWATER_SEED`, `BREAKWATER_STEPS`, `BREAKWATER_AUTH` and `BREAKWATER_REPORT` in the environment. The suite applies the first three through `SuiteConfig::from_env`, writes its `RunReport` to the fourth through `Exporter::write_if_requested`, and returns without asserting when it is driven that way; the CLI judges the JSON. Cargo's own output goes to stderr unchanged; the CLI prints the header, the shrunk sequence one step per line (index, handler, actor, ledger gap, arguments as `k=v`, outcome), the violation and the seed to reproduce with.
@@ -185,6 +211,8 @@ breakwater report <run.json> [--html <file>]
 `report` renders a JSON report in the terminal, and with `--html` writes a single static page (inline CSS and SVG, no scripts, no external resources): header, step timeline over ledger sequence with the violating step highlighted, per-step table, and a cumulative-spend chart with the limit line for `rolling_cap` or a TTL-over-ledgers chart with the zero line for `no_mid_lifecycle_expiry`. `docs/reports/` holds one page per demo.
 
 Exit codes: `0` all invariants held, `1` violation found, `2` usage or configuration error (bad arguments, no `tests/suite.rs`, cargo failed without writing a report). The JSON report is the `RunReport` structure and is stable for CI consumption.
+
+`snapshot` runs `cargo test --test suite breakwater_snapshot -- --exact --nocapture` the same way (plus `--features` if given) with `BREAKWATER_SEED`, `BREAKWATER_STEPS`, `BREAKWATER_AUTH` and `BREAKWATER_SNAPSHOT_OUT`, the path the suite writes its `BudgetReport` to. Without `--check` it merges the report into the snapshot file (`.breakwater-snapshot.json` in the current directory by default) and refuses to overwrite a file it cannot read. With `--check` it reads the file first, before cargo starts, replays the recorded seed, step range and authorization mode, and compares within `--tolerance` (default `5%`, accepts `2.5%`, `0%`). `--suite` is needed only when the file holds several suites. Exit codes are those of `run`: `0` recorded or within the tolerance, `1` a regression (or a changed sample count), `2` usage or configuration error, which includes a missing, malformed, unsupported or stale snapshot.
 <!-- ANCHOR_END: cli -->
 
 ## 7. Stellar features exercised
@@ -194,7 +222,7 @@ Exit codes: `0` all invariants held, `1` violation found, `2` usage or configura
 | `require_auth` / `__check_auth` / `CustomAccountInterface` | `Real` auth mode |
 | State archival: `extend_ttl`, entry `live_until` read straight from the ledger entries (not `get_ttl`, which restores), instance vs persistent durability | `ttl-archival` pack (§5) |
 | Ledger info manipulation via `testutils::Ledger` | `LedgerAdvance` |
-| Per-invocation resource metering (`get_last_invocation_resources`) | `RestoreCostWithinBudget` |
+| Per-invocation resource metering (`get_last_invocation_resources`) | `RestoreCostWithinBudget`, `budget-snapshot` (§5) |
 | Stellar CLI deploy + invoke on Testnet | demo replay: three agent-signed `policy-bypass` payments through the real smart account (README, Testnet evidence) |
 
 ## 8. Decisions and open questions

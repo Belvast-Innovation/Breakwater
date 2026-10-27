@@ -54,9 +54,10 @@ The workspace:
 | Crate | Path | Purpose |
 | --- | --- | --- |
 | `breakwater` | `crates/breakwater` | Core library: `Suite`, `Handler`, `Invariant`, sequence generation, shrinking, export |
-| `breakwater-cli` | `crates/breakwater-cli` | `breakwater run \| export \| report` |
+| `breakwater-cli` | `crates/breakwater-cli` | `breakwater run \| export \| report \| snapshot` |
 | `breakwater-pack-policy-bypass` | `crates/packs/policy-bypass` | Invariants and generators for OpenZeppelin smart accounts |
 | `breakwater-pack-ttl-archival` | `crates/packs/ttl-archival` | Invariants and ledger-advance strategies for TTL |
+| `breakwater-pack-budget-snapshot` | `crates/packs/budget-snapshot` | Per-handler resource sampling, the `.breakwater-snapshot.json` model and the regression comparison |
 | `example-policy-bypass` | `examples/policy-bypass` | `DemoAccount`, an OpenZeppelin smart account with a mis-sized spending window, plus the suite |
 | `example-owner-account` | `examples/policy-bypass/contracts/owner-account` | The owner's Ed25519 key account (`Signer::Delegated` of the demo account) |
 | `example-spending-limit-policy` | `examples/policy-bypass/contracts/spending-limit-policy` | OpenZeppelin `SpendingLimit` as a deployable contract |
@@ -138,6 +139,11 @@ RUSTFLAGS="-D warnings" stellar contract build --package example-ttl-archival   
 
 # run a suite with a fixed seed (drives `cargo test --test suite breakwater_suite` in that crate)
 cargo run -p breakwater-cli -- run examples/policy-bypass --seed 7 --steps 1..=10 --auth real
+
+# record per-handler resource usage, then check a later run against it (exit 1 on a regression)
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --seed 7
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --features regress-demo   # exit 1
 
 # export the shrunk failure as a regression test, or render a saved report
 cargo run -p breakwater-cli -- export examples/policy-bypass --seed 7 --out examples/policy-bypass/tests/repro_policy_bypass_7.rs
