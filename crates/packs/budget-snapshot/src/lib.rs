@@ -5,7 +5,8 @@
 //! the code, and fail CI when a later run exceeds them.
 //!
 //! - [`Resource`] and [`Sample`]: the twelve per-invocation measurements the
-//!   host reports, and one reading of them.
+//!   host reports, and one reading of them. [`Resource::class`] sorts them
+//!   into [`ResourceClass::Storage`] and [`ResourceClass::Compute`].
 //! - [`HandlerStats`]: `max` and `p50` of every resource over the samples of
 //!   one handler, plus the sample count.
 //! - [`Snapshot`]: the `.breakwater-snapshot.json` file model, keyed by suite
@@ -34,7 +35,7 @@ pub use compare::{
 };
 pub use record::{Metered, RecordOnly, Recorder, Target};
 pub use report::{BudgetError, BudgetReport, REPORT_ENV};
-pub use resource::{Resource, Sample};
+pub use resource::{Resource, ResourceClass, Sample};
 pub use snapshot::{
     Mode, Snapshot, SnapshotError, SuiteSnapshot, Toolchain, FORMAT_VERSION, SNAPSHOT_FILE,
 };
