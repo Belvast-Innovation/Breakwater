@@ -2,14 +2,15 @@
 //!
 //! Exit codes follow `docs/ARCHITECTURE.md` §6: `0` recorded, or within the
 //! tolerance; `1` a resource regressed; `2` usage or configuration error,
-//! which includes a snapshot that is missing, malformed or stale.
+//! which includes a snapshot that is missing, malformed or stale, and a
+//! `--tolerance` that does not parse.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context};
 use breakwater_pack_budget_snapshot::{
-    compare, BudgetReport, Comparison, Finding, Resource, Snapshot, SnapshotError, SuiteSnapshot,
-    Tolerance, Toolchain, Verdict, REPORT_ENV, SNAPSHOT_FILE,
+    compare_tiered, BudgetReport, Comparison, Finding, Resource, ResourceClass, Snapshot,
+    SnapshotError, SuiteSnapshot, Tolerances, Toolchain, Verdict, REPORT_ENV, SNAPSHOT_FILE,
 };
 use clap::Args;
 
@@ -32,9 +33,17 @@ pub struct SnapshotArgs {
     /// step range and authorization mode the snapshot recorded.
     #[arg(long, conflicts_with_all = ["seed", "steps", "auth"])]
     check: bool,
-    /// How far above the snapshot a value may be before `--check` fails.
-    #[arg(long, requires = "check", value_parser = parse_tolerance, default_value = "5%")]
-    tolerance: Tolerance,
+    /// How far above the snapshot a value may be before `--check` fails:
+    /// `5%` for every resource, or `storage=0%,compute=5%` per class or
+    /// resource. Default 5%.
+    #[arg(
+        long,
+        requires = "check",
+        value_name = "SPEC",
+        value_parser = parse_tolerances,
+        long_help = tolerance_help()
+    )]
+    tolerance: Option<Tolerances>,
     /// Seed for deterministic sequence generation.
     #[arg(long)]
     seed: Option<u64>,
@@ -57,8 +66,32 @@ pub struct SnapshotArgs {
     features: Option<String>,
 }
 
-fn parse_tolerance(text: &str) -> Result<Tolerance, String> {
-    Tolerance::parse(text).map_err(|e| e.to_string())
+fn parse_tolerances(text: &str) -> Result<Tolerances, String> {
+    Tolerances::parse(text).map_err(|e| e.to_string())
+}
+
+/// The long help of `--tolerance`. The classes are listed from
+/// `Resource::class`, so the help cannot disagree with the comparison.
+fn tolerance_help() -> String {
+    let classes: Vec<String> = ResourceClass::ALL
+        .iter()
+        .map(|class| {
+            let resources: Vec<&str> = class.resources().map(Resource::name).collect();
+            format!("  {:<8} {}", class.name(), resources.join(", "))
+        })
+        .collect();
+    format!(
+        "How far above the snapshot a value may be before `--check` fails. The default is 5%.\n\n\
+         A bare percentage applies to every resource: `--tolerance 2.5%`. KEY=PERCENTAGE sets \
+         the tolerance of one class or one resource, and items are separated by commas: \
+         `--tolerance storage=0%,compute=5%`, or `--tolerance 5%,storage=0%,instructions=3%`.\n\n\
+         A resource beats its class, a class beats a bare percentage, and anything not set is 5%. \
+         Each key may be given once, and so may a bare percentage. The option itself may be given \
+         once.\n\n\
+         Classes and the resources in them:\n{}\n\n\
+         A key may also be the name of any single resource, such as `instructions`.",
+        classes.join("\n")
+    )
 }
 
 /// Runs the command and returns the process exit code.
@@ -131,15 +164,16 @@ fn check(style: &Style, args: &SnapshotArgs) -> anyhow::Result<u8> {
     }
     let toolchain = read_toolchain(&args.suite_dir)?;
 
-    print_header(style, name, baseline, Some(args.tolerance));
-    let comparison = compare(
+    let tolerances = args.tolerance.clone().unwrap_or_default();
+    print_header(style, name, baseline, Some(&tolerances));
+    let comparison = compare_tiered(
         &stored.toolchain,
         baseline,
         &toolchain,
         &report.snapshot,
-        args.tolerance,
+        &tolerances,
     );
-    render_comparison(style, &comparison, &args.suite_dir);
+    render_comparison(style, &comparison, &args.suite_dir, &tolerances);
     Ok(exit_code(&comparison))
 }
 
@@ -321,7 +355,7 @@ fn toolchain_from_metadata(metadata: &serde_json::Value) -> anyhow::Result<Toolc
     })
 }
 
-fn print_header(style: &Style, name: &str, suite: &SuiteSnapshot, tolerance: Option<Tolerance>) {
+fn print_header(style: &Style, name: &str, suite: &SuiteSnapshot, tolerances: Option<&Tolerances>) {
     println!(
         "{} {}   {} {}   {} {}   {} {}   {} {}",
         style.bold("suite:"),
@@ -336,7 +370,7 @@ fn print_header(style: &Style, name: &str, suite: &SuiteSnapshot, tolerance: Opt
         suite.auth,
     );
     let mode = format!("mode: {}", suite.mode.as_str());
-    match tolerance {
+    match tolerances {
         Some(t) => println!("{}", style.dim(&format!("{mode}   tolerance: {t}"))),
         None => println!("{}", style.dim(&mode)),
     }
@@ -370,7 +404,7 @@ fn print_table(style: &Style, suite: &SuiteSnapshot) {
     }
 }
 
-fn render_comparison(style: &Style, comparison: &Comparison, dir: &Path) {
+fn render_comparison(style: &Style, comparison: &Comparison, dir: &Path, tolerances: &Tolerances) {
     match comparison {
         Comparison::Stale(reasons) => {
             println!("{}", style.dim(&"─".repeat(72)));
@@ -389,26 +423,62 @@ fn render_comparison(style: &Style, comparison: &Comparison, dir: &Path) {
                 ))
             );
         }
-        Comparison::Compared(verdict) => render_verdict(style, verdict, dir),
+        Comparison::Compared(verdict) => render_verdict(style, verdict, dir, tolerances),
     }
 }
 
-fn finding_line(style: &Style, finding: &Finding, mark: &str) -> String {
+/// One finding, ending with the tolerance it was judged by and where that
+/// tolerance came from: `limit 0% (storage)`.
+fn finding_line(style: &Style, finding: &Finding, mark: &str, tolerances: &Tolerances) -> String {
+    let (tolerance, source) = tolerances.resolve(finding.resource);
+    let limit = format!("limit {tolerance} ({})", source.label(finding.resource));
     format!(
-        "  {:<16} {:<28} {:<3} {:>12} -> {:<12} {:>8}  {mark}",
+        "  {:<16} {:<28} {:<3} {:>12} -> {:<12} {:>8}  {mark}  {}",
         finding.handler,
         finding.resource.name(),
         finding.stat.name(),
         finding.baseline,
         finding.current,
         style.bold(&finding.delta_text()),
+        style.dim(&limit),
     )
 }
 
-fn render_verdict(style: &Style, verdict: &Verdict, dir: &Path) {
+/// `storage 10, compute 4`: how many of `findings` are in each class.
+fn class_counts<'a>(findings: impl Iterator<Item = &'a Finding> + Clone) -> String {
+    ResourceClass::ALL
+        .iter()
+        .map(|class| {
+            let n = findings.clone().filter(|f| f.class() == *class).count();
+            format!("{} {n}", class.name())
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn summary_line(verdict: &Verdict) -> String {
+    let mut handlers: Vec<&str> = verdict
+        .regressions
+        .iter()
+        .map(|f| f.handler.as_str())
+        .chain(verdict.sample_changes.iter().map(|c| c.handler.as_str()))
+        .collect();
+    handlers.sort_unstable();
+    handlers.dedup();
+    format!(
+        "{} value(s) over the tolerance ({}) and {} sample count change(s) in {} handler(s)",
+        verdict.regressions.len(),
+        class_counts(verdict.regressions.iter()),
+        verdict.sample_changes.len(),
+        handlers.len()
+    )
+}
+
+fn render_verdict(style: &Style, verdict: &Verdict, dir: &Path, tolerances: &Tolerances) {
     println!("{}", style.dim(&"─".repeat(72)));
     for finding in &verdict.regressions {
-        println!("{}", finding_line(style, finding, &style.red("REGRESSION")));
+        let mark = style.red("REGRESSION");
+        println!("{}", finding_line(style, finding, &mark, tolerances));
     }
     for change in &verdict.sample_changes {
         println!(
@@ -421,7 +491,8 @@ fn render_verdict(style: &Style, verdict: &Verdict, dir: &Path) {
         );
     }
     for finding in &verdict.improvements {
-        println!("{}", finding_line(style, finding, &style.green("improved")));
+        let mark = style.green("improved");
+        println!("{}", finding_line(style, finding, &mark, tolerances));
     }
     if verdict.passed() {
         println!("{}", style.green("all handlers are within the tolerance"));
@@ -429,38 +500,50 @@ fn render_verdict(style: &Style, verdict: &Verdict, dir: &Path) {
             println!(
                 "{}",
                 style.dim(&format!(
-                    "{} value(s) improved; run `breakwater snapshot {}` to record the lower baseline",
+                    "{} value(s) improved ({}); run `breakwater snapshot {}` to record the lower baseline",
                     verdict.improvements.len(),
+                    class_counts(verdict.improvements.iter()),
                     dir.display()
                 ))
             );
         }
     } else {
-        let mut handlers: Vec<&str> = verdict
-            .regressions
-            .iter()
-            .map(|f| f.handler.as_str())
-            .chain(verdict.sample_changes.iter().map(|c| c.handler.as_str()))
-            .collect();
-        handlers.sort_unstable();
-        handlers.dedup();
-        println!(
-            "{}",
-            style.red(&format!(
-                "{} value(s) over the tolerance and {} sample count change(s) in {} handler(s)",
-                verdict.regressions.len(),
-                verdict.sample_changes.len(),
-                handlers.len()
-            ))
-        );
+        println!("{}", style.red(&summary_line(verdict)));
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use breakwater_pack_budget_snapshot::{Mode, SampleChange};
+    use breakwater_pack_budget_snapshot::{Mode, SampleChange, StatKind};
+    use clap::Parser;
     use std::collections::BTreeMap;
+
+    /// `SnapshotArgs` is a subcommand's arguments; this makes it parseable alone.
+    #[derive(Debug, Parser)]
+    struct TestCli {
+        #[command(flatten)]
+        args: SnapshotArgs,
+    }
+
+    fn parse(args: &[&str]) -> Result<SnapshotArgs, clap::Error> {
+        TestCli::try_parse_from(
+            ["snapshot", "suite"]
+                .into_iter()
+                .chain(args.iter().copied()),
+        )
+        .map(|cli| cli.args)
+    }
+
+    fn finding(resource: Resource, baseline: i64, current: i64) -> Finding {
+        Finding {
+            handler: "withdraw".into(),
+            resource,
+            stat: StatKind::Max,
+            baseline,
+            current,
+        }
+    }
 
     fn suite() -> SuiteSnapshot {
         SuiteSnapshot {
@@ -549,5 +632,172 @@ mod tests {
             { "name": "breakwater", "version": "0.1.0" },
         ]});
         assert!(toolchain_from_metadata(&ambiguous).is_err());
+    }
+
+    #[test]
+    fn tolerance_takes_a_bare_value_or_a_list() {
+        let tolerance = |args: &[&str]| parse(args).expect("parses").tolerance;
+        assert_eq!(tolerance(&["--check"]), None);
+        assert_eq!(
+            tolerance(&["--check", "--tolerance", "0%"]),
+            Some(Tolerances::parse("0%").unwrap())
+        );
+        let tiered = tolerance(&["--check", "--tolerance", "storage=0%,compute=5%"]).unwrap();
+        assert_eq!(tiered.to_string(), "storage 0%, compute 5%");
+        assert_eq!(tiered.for_resource(Resource::WriteBytes).basis_points(), 0);
+        assert_eq!(tiered.for_resource(Resource::MemBytes).basis_points(), 500);
+        // `--tolerance=...` and a single resource work too.
+        let one = tolerance(&["--check", "--tolerance=instructions=3%"]).unwrap();
+        assert_eq!(one.for_resource(Resource::Instructions).basis_points(), 300);
+        assert_eq!(one.for_resource(Resource::MemBytes).basis_points(), 500);
+    }
+
+    #[test]
+    fn a_bad_tolerance_is_a_usage_error_with_exit_code_2() {
+        let usage = |args: &[&str]| {
+            let err = parse(args).expect_err(&format!("{args:?} was accepted"));
+            assert_eq!(err.exit_code(), 2, "{args:?}");
+            err.to_string()
+        };
+        for spec in [
+            "lots",
+            "",
+            ",",
+            "5%,",
+            "cpu=5%",
+            "Storage=0%",
+            "storage=",
+            "=5%",
+            "storage=lots",
+            "storage=0%,storage=1%",
+            "instructions=1%,instructions=2%",
+            "5%,5%",
+            "storage=42949673%",
+        ] {
+            usage(&["--check", "--tolerance", spec]);
+        }
+        // The message says what is wrong and which keys would work.
+        let message = usage(&["--check", "--tolerance", "cpu=5%"]);
+        assert!(message.contains("unknown tolerance key `cpu`"), "{message}");
+        assert!(
+            message.contains("storage, compute, instructions"),
+            "{message}"
+        );
+        // The option may be given once, and only together with --check.
+        usage(&["--check", "--tolerance", "0%", "--tolerance", "5%"]);
+        usage(&[
+            "--check",
+            "--tolerance",
+            "storage=0%",
+            "--tolerance",
+            "compute=5%",
+        ]);
+        usage(&["--tolerance", "0%"]);
+        usage(&["--tolerance", "storage=0%,compute=5%"]);
+    }
+
+    #[test]
+    fn the_help_lists_the_classes_as_the_comparison_sees_them() {
+        let help = tolerance_help();
+        for class in ResourceClass::ALL {
+            let line = help
+                .lines()
+                .find(|l| l.trim_start().starts_with(class.name()) && l.contains(','))
+                .unwrap_or_else(|| panic!("no line for {}: {help}", class.name()));
+            for resource in Resource::ALL {
+                assert_eq!(
+                    line.contains(resource.name()),
+                    resource.class() == *class,
+                    "{} in `{line}`",
+                    resource.name()
+                );
+            }
+        }
+        assert!(help.contains("storage=0%,compute=5%"));
+    }
+
+    #[test]
+    fn a_line_names_the_tolerance_it_was_judged_by() {
+        let style = Style::detect(true);
+        let tolerances = Tolerances::parse("storage=0%,compute=5%,mem_bytes=3%").unwrap();
+        let line = |resource, from, to| {
+            finding_line(
+                &style,
+                &finding(resource, from, to),
+                "REGRESSION",
+                &tolerances,
+            )
+        };
+        let storage = line(Resource::WriteEntries, 4, 5);
+        assert!(storage.contains("write_entries"), "{storage}");
+        assert!(
+            storage.contains("+25.0%  REGRESSION  limit 0% (storage)"),
+            "{storage}"
+        );
+        let compute = line(Resource::Instructions, 1000, 1200);
+        assert!(
+            compute.ends_with("REGRESSION  limit 5% (compute)"),
+            "{compute}"
+        );
+        let single = line(Resource::MemBytes, 1000, 1100);
+        assert!(
+            single.ends_with("REGRESSION  limit 3% (mem_bytes)"),
+            "{single}"
+        );
+
+        let uniform = Tolerances::parse("2.5%").unwrap();
+        let all = finding_line(
+            &style,
+            &finding(Resource::WriteBytes, 100, 110),
+            "REGRESSION",
+            &uniform,
+        );
+        assert!(all.ends_with("limit 2.5% (all)"), "{all}");
+        let default = finding_line(
+            &style,
+            &finding(Resource::WriteBytes, 100, 110),
+            "improved",
+            &Tolerances::default(),
+        );
+        assert!(
+            default.ends_with("improved  limit 5% (default)"),
+            "{default}"
+        );
+    }
+
+    #[test]
+    fn the_summary_counts_each_class() {
+        let mut verdict = Verdict::default();
+        for resource in [
+            Resource::WriteEntries,
+            Resource::WriteBytes,
+            Resource::Instructions,
+        ] {
+            verdict.regressions.push(finding(resource, 1, 2));
+        }
+        verdict.regressions.push(Finding {
+            handler: "cancel".into(),
+            ..finding(Resource::MemBytes, 1, 2)
+        });
+        verdict.sample_changes.push(SampleChange {
+            handler: "create_stream".into(),
+            baseline: 2,
+            current: 1,
+        });
+        assert_eq!(
+            summary_line(&verdict),
+            "4 value(s) over the tolerance (storage 2, compute 2) and 1 sample count change(s) \
+             in 3 handler(s)"
+        );
+        // A class without findings is still listed, with a zero.
+        let mut storage_only = Verdict::default();
+        storage_only
+            .regressions
+            .push(finding(Resource::WriteBytes, 1, 2));
+        assert_eq!(
+            summary_line(&storage_only),
+            "1 value(s) over the tolerance (storage 1, compute 0) and 0 sample count change(s) \
+             in 1 handler(s)"
+        );
     }
 }

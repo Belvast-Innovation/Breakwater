@@ -115,3 +115,62 @@ fn check_cannot_be_combined_with_run_parameters() {
     let out = snapshot(&["--check", "--tolerance", "lots"], &s.suite(), &s.file());
     assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
 }
+
+#[test]
+fn a_bad_tolerance_list_is_a_usage_error_before_anything_runs() {
+    let s = Scratch::new("tolerance-list");
+    for spec in [
+        "storage=0%,storage=1%",
+        "5%,5%",
+        "cpu=5%",
+        "storage=",
+        "5%,",
+        "storage=0%,compute=lots",
+    ] {
+        let out = snapshot(&["--check", "--tolerance", spec], &s.suite(), &s.file());
+        assert_eq!(out.status.code(), Some(2), "{spec}: {}", stderr(&out));
+        assert!(
+            stderr(&out).contains("--tolerance"),
+            "{spec}: {}",
+            stderr(&out)
+        );
+    }
+    let out = snapshot(
+        &[
+            "--check",
+            "--tolerance",
+            "storage=0%",
+            "--tolerance",
+            "compute=5%",
+        ],
+        &s.suite(),
+        &s.file(),
+    );
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    let out = snapshot(
+        &["--tolerance", "storage=0%,compute=5%"],
+        &s.suite(),
+        &s.file(),
+    );
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+}
+
+#[test]
+fn a_tiered_tolerance_reaches_the_baseline_check() {
+    // The list is valid, so the command gets as far as reading the baseline,
+    // which does not exist: a configuration error for that reason instead.
+    let s = Scratch::new("tolerance-ok");
+    for spec in [
+        "0%",
+        "storage=0%,compute=5%",
+        "5%,storage=0%,instructions=3%",
+    ] {
+        let out = snapshot(&["--check", "--tolerance", spec], &s.suite(), &s.file());
+        assert_eq!(out.status.code(), Some(2), "{spec}: {}", stderr(&out));
+        assert!(
+            stderr(&out).contains("does not exist"),
+            "{spec}: {}",
+            stderr(&out)
+        );
+    }
+}
