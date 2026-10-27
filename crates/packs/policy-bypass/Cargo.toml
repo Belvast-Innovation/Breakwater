@@ -6,7 +6,15 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-publish.workspace = true
+homepage = "https://breakwater.belvast.de"
+documentation = "https://docs.rs/breakwater-pack-policy-bypass"
+readme = "README.md"
+keywords = ["soroban", "stellar", "invariant", "fuzzing", "smart-account"]
+categories = ["development-tools::testing", "cryptography::cryptocurrencies"]
+# `src/bin/oz-auth-entry.rs` (the Testnet replay helper) is deliberately left out of the
+# package: it is a repository tool driven by `scripts/replay-testnet.sh`.
+include = ["src/*.rs", "README.md", "LICENSE", "NOTICE"]
+publish = true
 
 [dependencies]
 breakwater = { workspace = true }

@@ -21,15 +21,21 @@ repository = "https://github.com/Belvast-Innovation/Breakwater"
 publish = false
 
 [workspace.dependencies]
-# Soroban / Stellar. Pinned exactly: Protocol 28 release; OpenZeppelin 0.8.0 requires ^28.0.0.
-soroban-sdk = "=28.0.0"
-stellar-accounts = "=0.8.0"
+# These requirements are copied into the published crates, so they are lower bounds in the
+# default (caret) sense, never `=` pins: an exact pin would make every downstream project
+# that uses another compatible version fail to resolve. The exact versions the workspace
+# builds and tests with are fixed by the committed Cargo.lock.
+#
+# Soroban / Stellar. The soroban-sdk floor is the Protocol 28 release; OpenZeppelin
+# stellar-accounts 0.8.0 requires soroban-sdk ^28.
+soroban-sdk = "28.0.0"
+stellar-accounts = "0.8.0"
 # Signs AuthDigestPreimage digests for External (Ed25519) smart-account signers in tests and packs.
-ed25519-dalek = "=2.2.0"
+ed25519-dalek = "2.2.0"
 
 # Sequence generation and shrinking. proptest-state-machine 0.9.0 requires proptest ^1.12.
-proptest = "=1.12.0"
-proptest-state-machine = "=0.9.0"
+proptest = "1.12.0"
+proptest-state-machine = "0.9.0"
 
 # CLI and reporting.
 clap = { version = "4.6", features = ["derive"] }
@@ -39,9 +45,13 @@ anyhow = "1"
 thiserror = "2"
 
 # Workspace crates.
-breakwater = { path = "crates/breakwater" }
-breakwater-pack-policy-bypass = { path = "crates/packs/policy-bypass" }
-breakwater-pack-ttl-archival = { path = "crates/packs/ttl-archival" }
+# The core library is published as `soroban-breakwater` (the name `breakwater` is taken on
+# crates.io); its `[lib] name` stays `breakwater`, so `use breakwater::` is unchanged.
+# Internal dependencies carry a version because crates.io rejects path-only dependencies;
+# keep it in step with `[workspace.package] version`.
+breakwater = { path = "crates/breakwater", package = "soroban-breakwater", version = "0.1.0" }
+breakwater-pack-policy-bypass = { path = "crates/packs/policy-bypass", version = "0.1.0" }
+breakwater-pack-ttl-archival = { path = "crates/packs/ttl-archival", version = "0.1.0" }
 example-owner-account = { path = "examples/policy-bypass/contracts/owner-account" }
 example-spending-limit-policy = { path = "examples/policy-bypass/contracts/spending-limit-policy" }
 example-ed25519-verifier = { path = "examples/policy-bypass/contracts/ed25519-verifier" }

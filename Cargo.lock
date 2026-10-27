@@ -340,36 +340,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "breakwater"
-version = "0.1.0"
-dependencies = [
- "proptest",
- "proptest-state-machine",
- "serde",
- "serde_json",
- "soroban-sdk",
- "thiserror 2.0.21",
-]
-
-[[package]]
 name = "breakwater-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "breakwater",
  "clap",
  "serde_json",
+ "soroban-breakwater",
 ]
 
 [[package]]
 name = "breakwater-pack-policy-bypass"
 version = "0.1.0"
 dependencies = [
- "breakwater",
  "ed25519-dalek",
  "proptest",
  "serde",
  "serde_json",
+ "soroban-breakwater",
  "soroban-sdk",
  "stellar-accounts",
  "thiserror 2.0.21",
@@ -379,9 +367,9 @@ dependencies = [
 name = "breakwater-pack-ttl-archival"
 version = "0.1.0"
 dependencies = [
- "breakwater",
  "serde",
  "serde_json",
+ "soroban-breakwater",
  "soroban-sdk",
 ]
 
@@ -1000,7 +988,6 @@ dependencies = [
 name = "example-policy-bypass"
 version = "0.1.0"
 dependencies = [
- "breakwater",
  "breakwater-pack-policy-bypass",
  "ed25519-dalek",
  "example-ed25519-verifier",
@@ -1009,6 +996,7 @@ dependencies = [
  "example-spending-limit-policy",
  "serde",
  "serde_json",
+ "soroban-breakwater",
  "soroban-sdk",
  "stellar-accounts",
 ]
@@ -1025,11 +1013,11 @@ dependencies = [
 name = "example-ttl-archival"
 version = "0.1.0"
 dependencies = [
- "breakwater",
  "breakwater-pack-ttl-archival",
  "example-ttl-archival",
  "serde",
  "serde_json",
+ "soroban-breakwater",
  "soroban-sdk",
 ]
 
@@ -1964,6 +1952,18 @@ name = "smallvec"
 version = "1.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
+
+[[package]]
+name = "soroban-breakwater"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "proptest-state-machine",
+ "serde",
+ "serde_json",
+ "soroban-sdk",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "soroban-builtin-sdk-macros"

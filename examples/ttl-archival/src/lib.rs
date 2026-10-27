@@ -10,7 +10,7 @@
 //! archived as soon as the network's minimum persistent TTL runs out, even
 //! though the business logic says it has months to go. Its second defect is
 //! `bump_ttl`: a public, unauthenticated, uncapped TTL extension, which lets
-//! anyone keep entries alive at the contract's rent. [`fixed::PaymentStreamFixed`]
+//! anyone keep entries alive at the contract's rent. `fixed::PaymentStreamFixed`
 //! is the same contract with the extensions in place and `bump_ttl` guarded,
 //! used as the control.
 #![no_std]

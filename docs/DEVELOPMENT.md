@@ -87,7 +87,7 @@ stellar contract build --package example-ttl-archival
 | `ed25519-dalek` | Signs the `AuthDigestPreimage` digest for External (Ed25519) smart-account signers in `AuthMode::Real` | https://docs.rs/ed25519-dalek |
 | `soroban-fork` (not yet a dependency) | Lazy-loading mainnet/testnet fork for fuzzing live state. Currently supports `soroban-sdk` 25.x only; it will be added once it supports SDK 28 | https://docs.rs/soroban-fork |
 
-Versions are pinned in `Cargo.toml`; `Cargo.lock` is committed.
+`Cargo.toml` declares minimum versions (caret ranges, not `=` pins), because the requirements are copied into the published library crates. `Cargo.lock` is committed and fixes the exact versions the workspace is built and tested with.
 
 ## 5. AI tooling: Claude Code, Raven MCP, Stellar Dev Skill
 

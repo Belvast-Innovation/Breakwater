@@ -33,6 +33,23 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      # Rustdoc warnings (broken links, missing docs) fail the build, because docs.rs
+      # renders the published crates from exactly these comments.
+      - name: Docs
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps
+
+      # Every published crate ships the license and notice files from the repository root;
+      # cargo only packages files inside the crate directory, so the copies must not drift.
+      - name: Check license and notice copies
+        run: |
+          for crate in crates/breakwater crates/breakwater-cli crates/packs/policy-bypass crates/packs/ttl-archival; do
+            for file in LICENSE NOTICE; do
+              cmp "$file" "$crate/$file" || { echo "::error::$crate/$file differs from $file"; exit 1; }
+            done
+          done
+
       # Both demos must find their bug: `breakwater run` exits 1 on a violation,
       # so 0 (nothing found) or 2 (usage or setup error) fails the build. A relative
       # --json path from the repository root must produce a report the CLI can render.
