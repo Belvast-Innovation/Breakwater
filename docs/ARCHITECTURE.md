@@ -202,7 +202,7 @@ Exit codes: `0` all invariants held, `1` violation found, `2` usage or configura
 **Decided**
 
 - How the CLI drives a suite: `breakwater run <suite-dir>` executes `cargo test --test suite breakwater_suite` in the target directory, passes seed, step range and auth mode through environment variables, and reads the JSON report the suite writes. No separate `suite` binary per example. See §6.
-- `soroban-fork` is not a dependency for the hackathon build: it currently supports `soroban-sdk` 25.x only and the workspace is pinned to 28.0.0. Mainnet-state fuzzing stays a roadmap item.
+- `soroban-fork` is not a dependency for the hackathon build: it currently supports `soroban-sdk` 25.x only and the workspace is built against 28.0.0 (fixed by `Cargo.lock`). Mainnet-state fuzzing stays a roadmap item.
 - `Real` auth runs end to end at about 5 ms per step on the demo suite, so generation uses `Real` directly (see §4).
 - Sequence generation uses `proptest-state-machine`'s `Sequential` strategy directly; no custom `Strategy` was needed. Generators bias the arguments and ledger gaps instead of using preconditions.
 - Handler return values are recorded: `CallOutcome::SuccessWith` carries a value into `StepRecord::return_value` and the exported JSON. The `ttl-archival` `StreamModel` still infers stream ids from creation order, which matches the demo contract's counter.

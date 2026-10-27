@@ -23,16 +23,16 @@ Do not install or add anything not listed here without asking.
 | --- | --- | --- |
 | Rust | stable, 1.91 or newer (`rust-toolchain.toml`; `rust-version = "1.91"` in `Cargo.toml`, required by `soroban-sdk` 28.0.0) | `wasm32v1-none` target required for contracts |
 | Stellar CLI | 28.1.0 (`brew install stellar-cli` or `cargo install --locked stellar-cli`) | used for Testnet deploys and `stellar contract build`; CI uses `stellar/stellar-cli@v28.1.0` |
-| `soroban-sdk` | `=28.0.0` (Protocol 28), `testutils` feature | the only contract SDK in use |
-| `proptest`, `proptest-state-machine` | `=1.12.0`, `=0.9.0` | sequence generation and shrinking |
-| OpenZeppelin `stellar-contracts` (`stellar-accounts`) | `=0.8.0` | demo target for `policy-bypass` only |
+| `soroban-sdk` | `28.0.0` minimum, i.e. `^28.0.0` (Protocol 28), `testutils` feature | the only contract SDK in use |
+| `proptest`, `proptest-state-machine` | `1.12.0`, `0.9.0` minimum | sequence generation and shrinking |
+| OpenZeppelin `stellar-contracts` (`stellar-accounts`) | `0.8.0` minimum | demo target for `policy-bypass` only |
 | `clap`, `serde`, `serde_json`, `anyhow`, `thiserror` | `4.6` / `1` / `1` / `1` / `2` in `Cargo.toml`; `Cargo.lock` resolves 4.6.7, 1.0.229, 1.0.154, 1.0.104, 2.0.21 | CLI and reporting |
-| `ed25519-dalek` | `=2.2.0` (pinned) | signs `AuthDigestPreimage` digests for External (Ed25519) smart-account signers; used by the `policy-bypass` pack and the example suite |
+| `ed25519-dalek` | `2.2.0` minimum | signs `AuthDigestPreimage` digests for External (Ed25519) smart-account signers; used by the `policy-bypass` pack and the example suite |
 | `soroban-fork` | not a dependency yet | supports `soroban-sdk` 25.x only; revisit once it supports SDK 28 |
 | Raven MCP | `https://raven.stellar.org/mcp` | **Use it** for any Stellar / Soroban API question before guessing. Configured in `.mcp.json`. |
 | Stellar Dev Skill | Claude Code plugin | loaded; prefer it for SDK idioms |
 
-Dependency versions are pinned in `Cargo.toml` / `Cargo.lock`; do not bump them during the event unless a build is broken.
+The requirements in `[workspace.dependencies]` are minimum versions (caret ranges, never `=` pins), because they are copied into the published library crates and an exact pin would stop downstream projects from resolving. The exact versions we build and test with are fixed by the committed `Cargo.lock`; do not run `cargo update` or raise a minimum during the event unless a build is broken. After any `Cargo.toml` change, `git diff --exit-code Cargo.lock` should stay clean unless the change is meant to move a version.
 
 **Secrets:** there are none in this repo and there must never be. Testnet keys live in the Stellar CLI keystore (`stellar keys`), never in files. No `.env`.
 
