@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "breakwater-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "breakwater-pack-budget-snapshot",
@@ -352,7 +352,7 @@ dependencies = [
 
 [[package]]
 name = "breakwater-pack-budget-snapshot"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -363,7 +363,7 @@ dependencies = [
 
 [[package]]
 name = "breakwater-pack-policy-bypass"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ed25519-dalek",
  "proptest",
@@ -377,7 +377,7 @@ dependencies = [
 
 [[package]]
 name = "breakwater-pack-ttl-archival"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -982,7 +982,7 @@ checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
 name = "example-ed25519-verifier"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "soroban-sdk",
  "stellar-accounts",
@@ -990,7 +990,7 @@ dependencies = [
 
 [[package]]
 name = "example-owner-account"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "soroban-sdk",
  "stellar-accounts",
@@ -998,7 +998,7 @@ dependencies = [
 
 [[package]]
 name = "example-policy-bypass"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "breakwater-pack-policy-bypass",
  "ed25519-dalek",
@@ -1015,7 +1015,7 @@ dependencies = [
 
 [[package]]
 name = "example-spending-limit-policy"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "soroban-sdk",
  "stellar-accounts",
@@ -1023,7 +1023,7 @@ dependencies = [
 
 [[package]]
 name = "example-ttl-archival"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "breakwater-pack-budget-snapshot",
  "breakwater-pack-ttl-archival",
@@ -1968,7 +1968,7 @@ checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
 
 [[package]]
 name = "soroban-breakwater"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "proptest",
  "proptest-state-machine",
