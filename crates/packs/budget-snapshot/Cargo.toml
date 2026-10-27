@@ -1,0 +1,16 @@
+[package]
+name = "breakwater-pack-budget-snapshot"
+description = "Breakwater attack pack: per-handler resource snapshots and a regression gate for Soroban contracts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+breakwater = { workspace = true }
+soroban-sdk = { workspace = true, features = ["testutils"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

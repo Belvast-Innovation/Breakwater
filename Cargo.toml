@@ -5,6 +5,7 @@ members = [
     "crates/breakwater-cli",
     "crates/packs/policy-bypass",
     "crates/packs/ttl-archival",
+    "crates/packs/budget-snapshot",
     "examples/policy-bypass",
     "examples/policy-bypass/contracts/owner-account",
     "examples/policy-bypass/contracts/spending-limit-policy",
@@ -52,6 +53,7 @@ thiserror = "2"
 breakwater = { path = "crates/breakwater", package = "soroban-breakwater", version = "0.1.0" }
 breakwater-pack-policy-bypass = { path = "crates/packs/policy-bypass", version = "0.1.0" }
 breakwater-pack-ttl-archival = { path = "crates/packs/ttl-archival", version = "0.1.0" }
+breakwater-pack-budget-snapshot = { path = "crates/packs/budget-snapshot", version = "0.1.0" }
 example-owner-account = { path = "examples/policy-bypass/contracts/owner-account" }
 example-spending-limit-policy = { path = "examples/policy-bypass/contracts/spending-limit-policy" }
 example-ed25519-verifier = { path = "examples/policy-bypass/contracts/ed25519-verifier" }
