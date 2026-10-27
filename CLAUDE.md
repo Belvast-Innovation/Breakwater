@@ -32,6 +32,8 @@ Do not install or add anything not listed here without asking.
 | Raven MCP | `https://raven.stellar.org/mcp` | **Use it** for any Stellar / Soroban API question before guessing. Configured in `.mcp.json`. |
 | Stellar Dev Skill | Claude Code plugin | loaded; prefer it for SDK idioms |
 
+On Protocol 29, `soroban-sdk` 28 with Stellar CLI 28.1.0 is the combination listed on the Stellar [Software Versions](https://developers.stellar.org/docs/networks/software-versions) page. Before moving `soroban-sdk` to a new major version, confirm that OpenZeppelin `stellar-accounts` supports it. A contract's wasm records the SDK's protocol version in its env meta (`contractenvmetav0`, shown by `stellar contract info env-meta`), so wasm built with `soroban-sdk` 29 or newer can only be deployed to a network running that protocol version or a later one.
+
 The requirements in `[workspace.dependencies]` are minimum versions (caret ranges, never `=` pins), because they are copied into the published library crates and an exact pin would stop downstream projects from resolving. The exact versions we build and test with are fixed by the committed `Cargo.lock`; do not run `cargo update` or raise a minimum during the event unless a build is broken. After any `Cargo.toml` change, `git diff --exit-code Cargo.lock` should stay clean unless the change is meant to move a version.
 
 **Secrets:** there are none in this repo and there must never be. Testnet keys live in the Stellar CLI keystore (`stellar keys`), never in files. No `.env`.

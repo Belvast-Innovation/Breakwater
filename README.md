@@ -59,6 +59,7 @@ It ships with three **attack packs** for risks that are specific to Stellar:
 - [Attack packs](#attack-packs)
 - [How Stellar is used](#how-stellar-is-used)
 - [Testnet evidence](#testnet-evidence)
+- [Protocol compatibility](#protocol-compatibility)
 - [Project layout](#project-layout)
 - [Prior work and hackathon scope](#prior-work-and-hackathon-scope)
 - [AI-assisted development](#ai-assisted-development)
@@ -379,6 +380,21 @@ Each payment above went through the smart account's real `__check_auth`: the age
 
 The stream's expiry itself cannot be waited for within the hackathon: Testnet's minimum persistent TTL is currently 120 960 ledgers, about seven days (`stellar network settings --network testnet`, `state_archival.min_persistent_ttl`), and the stream entry, created at ledger 5383730 and never extended, is live until ledger 5504689 (`stellar ledger entry fetch contract-data`), roughly 1 November 2026. What the on-chain evidence shows is the stream being created and used; what the local suite shows is the entry being archived with most of the stream still to run. On a real network the consequence is not a failing call but a cost: the next transaction that touches an archived entry must restore it and pay for the restoration, a transaction built without the restore fails, and because the contract never extends TTL the entry is archived again after every quiet period of at least the minimum TTL.
 <!-- ANCHOR_END: testnet-evidence -->
+
+## Protocol compatibility
+
+Breakwater 0.1.0 is built with `soroban-sdk` 28 and Stellar CLI 28.1.0, the versions the Stellar [Software Versions](https://developers.stellar.org/docs/networks/software-versions) page lists for Protocol 29. Protocol 29 reached Testnet on 29 September 2026 and Mainnet on 1 October 2026; it is a security release with no new CAPs.
+
+On 27 October 2026 the shrunk `policy-bypass` sequence was replayed again on Testnet, now running Protocol 29, with fresh identities. Every deployment and the first two 49 USDC payments succeeded; the third payment needs a 1 728-ledger wait and is not recorded here.
+
+| Item | Value |
+| --- | --- |
+| Demo smart-account contract (`DemoAccount`) | [`CDZGJI7QRQ6CNCYGWSI7QTSJXZFMOTCMZDSVK4FMYASYJXS2L27ZX26N`](https://stellar.expert/explorer/testnet/contract/CDZGJI7QRQ6CNCYGWSI7QTSJXZFMOTCMZDSVK4FMYASYJXS2L27ZX26N), deployed in [`cf86ed87…2c1a`](https://stellar.expert/explorer/testnet/tx/cf86ed875da2ef7e68296ee94684e8666292860ab64ccada17b76e3b848d2c1a) |
+| Owner key account (`OwnerAccount`) | [`CBZ7C2I277XT4E5PVBTWR4P57LVNGOE3DAVYYWK3WLDTHXTJQIZVOA6X`](https://stellar.expert/explorer/testnet/contract/CBZ7C2I277XT4E5PVBTWR4P57LVNGOE3DAVYYWK3WLDTHXTJQIZVOA6X), deployed in [`9d2380a0…64bb`](https://stellar.expert/explorer/testnet/tx/9d2380a095c276bf6b85fac5b3f489639457a27edaf144c98798bce9868c64bb) |
+| Payment 1 (49 USDC, ledger 5412911) | [`4c2731a32960ea10c1474f9857c98e9a90865ff4992e713ada74f93a3328437f`](https://stellar.expert/explorer/testnet/tx/4c2731a32960ea10c1474f9857c98e9a90865ff4992e713ada74f93a3328437f) |
+| Payment 2 (49 USDC, ledger 5412922) | [`a2a68662fb4add717fe4639048d41fd1c54ed22ec2c36e20c078ae97cde3ff20`](https://stellar.expert/explorer/testnet/tx/a2a68662fb4add717fe4639048d41fd1c54ed22ec2c36e20c078ae97cde3ff20) |
+
+`soroban-sdk` stays at major version 28 for now: OpenZeppelin [`stellar-accounts`](https://crates.io/crates/stellar-accounts) 0.8.0, which the `policy-bypass` pack depends on, requires `soroban-sdk` `^28`. Breakwater will follow once OpenZeppelin publishes a release for a newer SDK. Because the public API of the Breakwater crates exposes `soroban_sdk` types, that upgrade is a breaking change and will ship as 0.2.0.
 
 ## Project layout
 
