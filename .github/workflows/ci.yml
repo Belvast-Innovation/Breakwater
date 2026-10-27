@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # release.yml runs the same checks on the commit it is about to publish.
+  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,14 +17,16 @@ jobs:
     name: ci
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch, 2026-10-27
         with:
+          # Pinned by SHA, the action cannot read the toolchain from its ref name.
+          toolchain: stable
           targets: wasm32v1-none
           components: rustfmt, clippy
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       - name: Format
         run: cargo fmt --all -- --check
@@ -59,6 +63,7 @@ jobs:
           cargo build -q -p breakwater-cli
           cli=target/debug/breakwater
           for demo in "policy-bypass 7" "ttl-archival 11"; do
+            # shellcheck disable=SC2086 # split "<example> <seed>" into $1 and $2
             set -- $demo
             "$cli" --no-color run "examples/$1" --seed "$2"
             code=$?
@@ -102,7 +107,7 @@ jobs:
 
       # soroban-sdk 28 refuses a bare `cargo build --target wasm32v1-none`: its build
       # script requires the spec-shaking support that only `stellar contract build` provides.
-      - uses: stellar/stellar-cli@v28.1.0
+      - uses: stellar/stellar-cli@c0f4d0da891bbf214c08b8c5035ae6db80e9a3bd # v28.1.0
 
       - name: Build example contracts (wasm)
         run: |
