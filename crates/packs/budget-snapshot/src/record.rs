@@ -8,6 +8,17 @@
 //! Invariants run after the handler and often read the contract through a
 //! client, which is an invocation too. That is why the reading is taken inside
 //! the handler, by [`Metered`], right after the call returns.
+//!
+//! The same property makes a stale reading possible: a handler that returns
+//! success without invoking anything (a no-op for unsuitable arguments, say)
+//! leaves the previous step's record as the "last invocation", and if that
+//! step called the same target it would be sampled a second time. Comparing
+//! the record before and after the call cannot tell that from a second call
+//! with identical, perfectly deterministic costs. So before every call
+//! [`Metered`] makes the last invocation something that can never be the
+//! target: an empty `as_contract` frame, which the host meters as a call of
+//! the empty function name. Whatever the handler then leaves behind is
+//! either its own invocation or that marker, and the marker is refused.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -42,6 +53,15 @@ impl Target {
         }
     }
 
+    /// Makes the host's last top-level invocation a call of the empty
+    /// function name on this contract, which is never the target: `matches`
+    /// refuses an empty function name, and a contract has no such function.
+    /// `Env::as_contract` is metered by the host like any top-level call,
+    /// does not need the contract to be deployed, and touches no storage.
+    fn mark(&self, env: &Env) {
+        env.as_contract(&Address::from_str(env, &self.contract), || {});
+    }
+
     /// True if `invocation`, the `Debug` form of the host's description of the
     /// last top-level invocation, is a call of this contract function.
     ///
@@ -53,6 +73,9 @@ impl Target {
         let Ok(function) = ScSymbol::try_from(self.function) else {
             return false;
         };
+        if self.function.is_empty() {
+            return false;
+        }
         let contract = ScAddress::from(&Address::from_str(env, &self.contract));
         invocation == format!("InvokeContract({contract:?}, {function:?})")
     }
@@ -216,7 +239,9 @@ impl Recorder {
 /// returns it reads the host's metering of the last top-level invocation and,
 /// if the call succeeded and that invocation is the declared [`Target`],
 /// records it. The target call must therefore be the last top-level call the
-/// handler makes: set-up calls such as minting go before it.
+/// handler makes: set-up calls such as minting go before it. A handler that
+/// reports success without invoking the target at all is refused as well, the
+/// same way, instead of being credited with the previous step's call.
 pub struct Metered<H> {
     inner: H,
     target: Target,
@@ -249,6 +274,7 @@ impl<H: Handler> Handler for Metered<H> {
         actor: &Actor,
         args: &Self::Args,
     ) -> Result<CallOutcome, HandlerError> {
+        self.target.mark(env);
         let outcome = self.inner.call(env, ctx, actor, args)?;
         let args_json = serde_json::to_string(args).unwrap_or_else(|_| format!("{args:?}"));
         self.recorder.observe(

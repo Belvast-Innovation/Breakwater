@@ -8,7 +8,8 @@
 
 use breakwater::proptest::prelude::*;
 use breakwater::{
-    Actor, CallContext, CallOutcome, Handler, HandlerError, Suite, SuiteConfig, ViolationKind,
+    Actor, CallContext, CallOutcome, Gap, Handler, HandlerError, ReplayStep, Suite, SuiteConfig,
+    ViolationKind,
 };
 use breakwater_pack_budget_snapshot::{
     compare, BudgetError, BudgetReport, Comparison, Recorder, Resource, Snapshot, StatKind, Target,
@@ -363,5 +364,118 @@ impl breakwater::Invariant for AlwaysFails {
 
     fn check(&self, _env: &Env, _log: &breakwater::TxLog) -> Result<(), breakwater::Violation> {
         Err(breakwater::Violation::new("by design"))
+    }
+}
+
+/// Reports success without invoking anything: the "no-op for unsuitable
+/// arguments" path a handler is allowed to have.
+struct Idle {
+    actors: Vec<Actor>,
+}
+
+impl Handler for Idle {
+    type Args = ();
+
+    fn name(&self) -> &'static str {
+        "idle"
+    }
+
+    fn actors(&self) -> &[Actor] {
+        &self.actors
+    }
+
+    fn strategy(&self) -> BoxedStrategy<()> {
+        Just(()).boxed()
+    }
+
+    fn call(
+        &self,
+        _env: &Env,
+        _ctx: &CallContext,
+        _actor: &Actor,
+        _args: &(),
+    ) -> Result<CallOutcome, HandlerError> {
+        Ok(CallOutcome::Success)
+    }
+}
+
+/// Replays exactly `handlers` (names, in order) against a `Light` counter in
+/// which both `increment` and `idle` are measured against `Light::increment`.
+fn replay(handlers: &[&str]) -> Result<BudgetReport, BudgetError> {
+    let env = Env::default();
+    let contract = env.register(Light, ()).to_string().to_string();
+    let actor = Actor::generate(&env, "caller");
+    let recorder = Recorder::new();
+    let config = config(7);
+    let restore = contract.clone();
+    let steps: Vec<ReplayStep> = handlers
+        .iter()
+        .map(|h| ReplayStep {
+            handler: (*h).to_owned(),
+            actor: "caller".to_owned(),
+            args: serde_json::Value::Null,
+            gap: Gap::default(),
+        })
+        .collect();
+    let report = Suite::new("counter-budget", env)
+        .config(config.clone())
+        .handler(recorder.handler(
+            Increment {
+                contract: contract.clone(),
+                variant: Variant::Light,
+                read_back: false,
+                actors: vec![actor.clone()],
+            },
+            Target::new(contract.clone(), "increment"),
+        ))
+        .handler(recorder.handler(
+            Idle {
+                actors: vec![actor],
+            },
+            Target::new(contract, "increment"),
+        ))
+        .invariant(recorder.invariant())
+        .on_restore(move |env| {
+            env.register_at(&Address::from_str(env, &restore), Light, ());
+        })
+        .replay(&steps)
+        .expect("replay runs");
+    assert!(report.failure().is_none(), "{:?}", report.failure());
+    recorder.finish(&config, &report)
+}
+
+#[test]
+fn a_success_without_a_call_is_not_credited_with_the_previous_step() {
+    // `increment` invokes the target; `idle` then succeeds without invoking
+    // anything, so the host's last invocation is still the one `increment`
+    // made, and a target check alone would sample it a second time.
+    match replay(&["increment", "idle"]) {
+        Err(BudgetError::Unattributed { handlers }) => {
+            assert!(handlers.contains("`idle` (1)"), "{handlers}");
+            assert!(!handlers.contains("increment"), "{handlers}");
+        }
+        other => panic!("expected Unattributed, got {other:?}"),
+    }
+    // Also when nothing at all has been invoked yet.
+    assert!(matches!(
+        replay(&["idle"]),
+        Err(BudgetError::Unattributed { .. })
+    ));
+}
+
+#[test]
+fn two_real_calls_with_identical_costs_are_still_two_samples() {
+    // The guard must not be a comparison of consecutive readings: the host's
+    // costs are deterministic, so a repeated call can read exactly the same.
+    let report = replay(&["increment", "increment"]).expect("measures");
+    assert_eq!(report.snapshot.handlers["increment"].samples, 2);
+    assert!(!report.snapshot.handlers.contains_key("idle"));
+}
+
+#[test]
+fn a_target_with_no_function_name_never_matches() {
+    match measure_target(Variant::Light, 7, false, "") {
+        Err(BudgetError::Unattributed { handlers }) => assert!(handlers.contains("increment")),
+        other => panic!("expected Unattributed, got {other:?}"),
     }
 }
