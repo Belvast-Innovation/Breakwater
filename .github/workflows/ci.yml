@@ -54,6 +54,11 @@ jobs:
             done
           done
 
+      # The Stellar CLI and Protocol badges in README.md are static; they must match the
+      # stellar-cli version installed below and the soroban-sdk major version in Cargo.toml.
+      - name: Check the README badges
+        run: python3 scripts/check-readme-badges.py
+
       # Both demos must find their bug: `breakwater run` exits 1 on a violation,
       # so 0 (nothing found) or 2 (usage or setup error) fails the build. A relative
       # --json path from the repository root must produce a report the CLI can render.

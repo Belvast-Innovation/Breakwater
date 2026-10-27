@@ -21,12 +21,12 @@
 </p>
 <!-- Stack -->
 <p>
-  <a href="Cargo.toml"><img src="https://img.shields.io/badge/Rust-1.91+-B7410E?logo=rust&logoColor=white" alt="Rust 1.91+"></a>
-  <a href="https://docs.rs/soroban-sdk/28.0.0"><img src="https://img.shields.io/badge/soroban--sdk-28.0.0-7D00FF?logo=stellar&logoColor=white" alt="soroban-sdk 28.0.0"></a>
-  <a href="https://stellar.org/blog/developers/introducing-adapter-protocol-28-on-stellar"><img src="https://img.shields.io/badge/Protocol-28-7D00FF?logo=stellar&logoColor=white" alt="Stellar Protocol 28"></a>
+  <a href="Cargo.toml"><img src="https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2FBelvast-Innovation%2FBreakwater%2Fmain%2FCargo.toml&query=%24.workspace.package%5B%27rust-version%27%5D&label=Rust&suffix=%2B&color=B7410E&logo=rust&logoColor=white" alt="Minimum supported Rust version"></a>
+  <a href="https://crates.io/crates/soroban-sdk"><img src="https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2FBelvast-Innovation%2FBreakwater%2Fmain%2FCargo.toml&query=%24.workspace.dependencies%5B%27soroban-sdk%27%5D&label=soroban-sdk&color=7D00FF&logo=stellar&logoColor=white" alt="Required soroban-sdk version"></a>
+  <a href="#protocol-compatibility"><img src="https://img.shields.io/badge/Protocol-28%20%C2%B7%20tested%20on%2029-7D00FF?logo=stellar&logoColor=white" alt="Built for Stellar Protocol 28, tested on Protocol 29"></a>
   <a href="https://github.com/stellar/stellar-cli/releases/tag/v28.1.0"><img src="https://img.shields.io/badge/Stellar%20CLI-28.1.0-7D00FF?logo=stellar&logoColor=white" alt="Stellar CLI 28.1.0"></a>
-  <a href="https://crates.io/crates/stellar-accounts/0.8.0"><img src="https://img.shields.io/badge/stellar--accounts-0.8.0-4E5EE4?logo=openzeppelin&logoColor=white" alt="OpenZeppelin stellar-accounts 0.8.0"></a>
-  <a href="https://crates.io/crates/proptest/1.12.0"><img src="https://img.shields.io/badge/proptest-1.12-orange" alt="proptest 1.12"></a>
+  <a href="https://crates.io/crates/stellar-accounts"><img src="https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2FBelvast-Innovation%2FBreakwater%2Fmain%2FCargo.toml&query=%24.workspace.dependencies%5B%27stellar-accounts%27%5D&label=stellar-accounts&color=4E5EE4&logo=openzeppelin&logoColor=white" alt="Required OpenZeppelin stellar-accounts version"></a>
+  <a href="https://crates.io/crates/proptest"><img src="https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2FBelvast-Innovation%2FBreakwater%2Fmain%2FCargo.toml&query=%24.workspace.dependencies.proptest&label=proptest&color=orange" alt="Required proptest version"></a>
 </p>
 <!-- Hackathon -->
 <p>
@@ -389,7 +389,7 @@ The stream's expiry itself cannot be waited for within the hackathon: Testnet's 
 
 ## Protocol compatibility
 
-Breakwater 0.1.0 is built with `soroban-sdk` 28 and Stellar CLI 28.1.0, the versions the Stellar [Software Versions](https://developers.stellar.org/docs/networks/software-versions) page lists for Protocol 29. Protocol 29 reached Testnet on 29 September 2026 and Mainnet on 1 October 2026; it is a security release with no new CAPs.
+Breakwater 0.1.x is built with `soroban-sdk` 28 and Stellar CLI 28.1.0, the versions the Stellar [Software Versions](https://developers.stellar.org/docs/networks/software-versions) page lists for Protocol 29. Protocol 29 reached Testnet on 29 September 2026 and Mainnet on 1 October 2026; it is a security release with no new CAPs.
 
 On 27 October 2026 the shrunk `policy-bypass` sequence was replayed again on Testnet, now running Protocol 29, with fresh identities. Every deployment and the first two 49 USDC payments succeeded; the third payment needs a 1 728-ledger wait and is not recorded here.
 
@@ -495,7 +495,7 @@ Stellar documentation was pulled into the AI context through the official **Rave
 - Mainnet fork via `soroban-fork` once it supports `soroban-sdk` 28 (it currently targets 25.x)
 - AI-assisted generation of handlers and invariants from a contract's interface
 - GitHub Action packaging; apply to the Stellar Community Fund (Build / Public Goods)
-- Done: publish to crates.io, as [`soroban-breakwater`](https://crates.io/crates/soroban-breakwater) 0.1.0 and its companion crates (see [Installation](#installation))
+- Done: publish to crates.io, as [`soroban-breakwater`](https://crates.io/crates/soroban-breakwater) and its companion crates (see [Installation](#installation))
 <!-- ANCHOR_END: roadmap -->
 
 ## Team

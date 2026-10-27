@@ -94,7 +94,7 @@ On a **minor** bump, update the install snippets that pin the previous minor, e.
 `soroban-breakwater = "0.1"` → `"0.2"`, in `README.md` and every crate README:
 
 ```bash
-grep -rn '"0\.1"' README.md crates/*/README.md crates/packs/*/README.md
+grep -rn -e '"0\.1"' -e '0\.1\.x' README.md crates/*/README.md crates/packs/*/README.md
 ```
 
 Also grep `README.md` and `docs/` for the old full version and update statements about
@@ -113,9 +113,14 @@ for c in example-policy-bypass example-owner-account example-spending-limit-poli
          example-ed25519-verifier example-ttl-archival; do
   RUSTFLAGS="-D warnings" stellar contract build --package "$c"
 done
+python3 scripts/check-readme-badges.py   # static README badges vs ci.yml and Cargo.toml
 cargo publish --workspace --dry-run --locked
 python3 scripts/release-plan.py plan     # expect mode "release" for the new version
 ```
+
+The version badges at the top of `README.md` need no edit for a release: the crates.io,
+docs.rs and stack badges are dynamic. If the badge check fails (a new Stellar CLI version in
+`ci.yml`, a new `soroban-sdk` major), fix the badge it names before opening the PR.
 
 In a cloud session (CLAUDE.md §9) prefer `cargo check -p <crate>` while iterating, but run
 the full list above once before opening the PR.
