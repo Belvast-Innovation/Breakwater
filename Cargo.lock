@@ -1025,6 +1025,7 @@ dependencies = [
 name = "example-ttl-archival"
 version = "0.1.0"
 dependencies = [
+ "breakwater-pack-budget-snapshot",
  "breakwater-pack-ttl-archival",
  "example-ttl-archival",
  "serde",

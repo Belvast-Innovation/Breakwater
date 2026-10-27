@@ -11,6 +11,7 @@ mod common;
 use std::time::Instant;
 
 use breakwater::{Exporter, Outcome, SuiteConfig, ViolationKind, LEDGERS_PER_DAY};
+use breakwater_pack_budget_snapshot::{Resource, REPORT_ENV};
 use breakwater_pack_ttl_archival::ResourceBudget;
 use common::*;
 
@@ -208,4 +209,54 @@ fn the_fixed_contract_never_restores_anything() {
         "{:?}",
         report.failure().map(|f| &f.violation)
     );
+}
+
+/// The test `breakwater snapshot` drives. It measures every handler of the
+/// buggy contract and hands the result to the CLI through
+/// `BREAKWATER_SNAPSHOT_OUT`; judging it against `.breakwater-snapshot.json`
+/// is the CLI's job. Under plain `cargo test` it asserts the shape of the
+/// measurement instead.
+#[test]
+fn breakwater_snapshot() {
+    let driven = std::env::var_os(REPORT_ENV).is_some();
+    let config = SuiteConfig::from_env(snapshot_config());
+    let (suite, recorder) = snapshot_suite(config.clone());
+    let report = suite.run().expect("suite runs");
+    let measured = recorder
+        .finish(&config, &report)
+        .unwrap_or_else(|e| panic!("{e}"));
+    measured
+        .write_if_requested()
+        .unwrap_or_else(|e| panic!("{e}"));
+    if driven {
+        return;
+    }
+
+    let handlers = &measured.snapshot.handlers;
+    assert_eq!(
+        handlers.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["cancel", "create_stream", "withdraw"]
+    );
+    for stats in handlers.values() {
+        assert!(stats.samples > 0);
+    }
+    // Creating a stream writes the stream and the id counter; a withdrawal
+    // rewrites only the stream (and the two token balances it moves).
+    let writes = |h: &str| {
+        handlers[h]
+            .get(Resource::WriteEntries)
+            .expect("resource")
+            .max
+    };
+    assert!(writes("create_stream") >= 2);
+    assert!(writes("withdraw") >= 1);
+    // The deliberate regression is off in the default build.
+    #[cfg(not(feature = "regress-demo"))]
+    {
+        let rent = handlers["withdraw"]
+            .get(Resource::PersistentEntryRentBumps)
+            .expect("resource")
+            .max;
+        assert!(rent <= writes("withdraw"), "no receipt entry is written");
+    }
 }

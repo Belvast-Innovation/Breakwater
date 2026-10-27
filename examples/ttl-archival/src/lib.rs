@@ -175,6 +175,12 @@ mod logic {
         env.storage()
             .persistent()
             .set(&DataKey::Stream(id), &stream);
+        // The regression the budget-snapshot demo is meant to catch: one more
+        // persistent write on every withdrawal.
+        #[cfg(feature = "regress-demo")]
+        env.storage()
+            .persistent()
+            .set(&(soroban_sdk::symbol_short!("rcpt"), id), &due);
         keep_alive::<EXTEND>(env, id, &stream);
         due
     }

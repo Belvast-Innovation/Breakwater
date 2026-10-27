@@ -17,6 +17,9 @@ doctest = false
 # so the wasm build exports only the buggy `PaymentStream`: two contracts in
 # one cdylib collide on their exported function names.
 fixed = []
+# A deliberate resource regression for the budget-snapshot demo: `withdraw`
+# also writes a receipt entry. Off by default, so the wasm build is unchanged.
+regress-demo = []
 
 [dependencies]
 soroban-sdk = { workspace = true }
@@ -25,6 +28,7 @@ soroban-sdk = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
 breakwater = { workspace = true }
 breakwater-pack-ttl-archival = { workspace = true }
+breakwater-pack-budget-snapshot = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 example-ttl-archival = { path = ".", features = ["fixed"] }
