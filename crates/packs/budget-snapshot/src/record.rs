@@ -242,6 +242,13 @@ impl Recorder {
 /// handler makes: set-up calls such as minting go before it. A handler that
 /// reports success without invoking the target at all is refused as well, the
 /// same way, instead of being credited with the previous step's call.
+///
+/// The marker that makes this possible is a top-level invocation of its own,
+/// and the host clears the events when any invocation starts. A handler that
+/// makes no call in a step therefore also finds the events of the previous
+/// step gone, where without `Metered` they would still be readable. A handler
+/// that does make its call is not affected: its own invocation clears them
+/// anyway.
 pub struct Metered<H> {
     inner: H,
     target: Target,
