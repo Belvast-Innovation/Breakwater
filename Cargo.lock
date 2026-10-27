@@ -344,9 +344,21 @@ name = "breakwater-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "breakwater-pack-budget-snapshot",
  "clap",
  "serde_json",
  "soroban-breakwater",
+]
+
+[[package]]
+name = "breakwater-pack-budget-snapshot"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "soroban-breakwater",
+ "soroban-sdk",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1013,6 +1025,7 @@ dependencies = [
 name = "example-ttl-archival"
 version = "0.1.0"
 dependencies = [
+ "breakwater-pack-budget-snapshot",
  "breakwater-pack-ttl-archival",
  "example-ttl-archival",
  "serde",

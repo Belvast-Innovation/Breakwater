@@ -56,10 +56,49 @@ pub fn resolve_report_path(
     std::path::absolute(&path).with_context(|| format!("resolving {}", path.display()))
 }
 
+/// How a named test of a suite crate is run.
+pub struct TestRun<'a> {
+    /// Test function, matched exactly (`breakwater_suite`, `breakwater_snapshot`).
+    pub test: &'a str,
+    /// Comma-separated cargo features to enable in the suite crate.
+    pub features: Option<&'a str>,
+    /// Environment variables handed to the test.
+    pub env: Vec<(&'a str, std::ffi::OsString)>,
+    /// Pass `--nocapture`, so what the test prints to stderr reaches the
+    /// user even when the test fails. The CLI discards the test's stdout.
+    pub nocapture: bool,
+}
+
+/// Runs `cargo test --test suite <test> -- --exact` in `dir` and returns the
+/// exit status of cargo. The suite's output goes to stderr unchanged.
+pub fn run_test(dir: &Path, run: &TestRun<'_>) -> anyhow::Result<std::process::ExitStatus> {
+    let manifest = validate_suite_dir(dir)?;
+    let mut cmd = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
+    cmd.arg("test")
+        .arg("--manifest-path")
+        .arg(&manifest)
+        .arg("--test")
+        .arg("suite");
+    if let Some(features) = run.features {
+        cmd.arg("--features").arg(features);
+    }
+    cmd.arg(run.test).arg("--").arg("--exact");
+    if run.nocapture {
+        cmd.arg("--nocapture");
+    }
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit());
+    for (key, value) in &run.env {
+        cmd.env(key, value);
+    }
+    cmd.status().context("running cargo test")
+}
+
 /// Runs `cargo test --test suite breakwater_suite` in `dir` with the
 /// Breakwater environment and returns the report the suite wrote.
 pub fn run(dir: &Path, params: &RunParams<'_>) -> anyhow::Result<(RunReport, PathBuf)> {
-    let manifest = validate_suite_dir(dir)?;
+    validate_suite_dir(dir)?;
     let report_path = resolve_report_path(params.report, dir, params.seed)?;
     if let Some(parent) = report_path.parent() {
         std::fs::create_dir_all(parent)
@@ -67,29 +106,26 @@ pub fn run(dir: &Path, params: &RunParams<'_>) -> anyhow::Result<(RunReport, Pat
     }
     let _ = std::fs::remove_file(&report_path);
 
-    let mut cmd = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
-    cmd.arg("test")
-        .arg("--manifest-path")
-        .arg(&manifest)
-        .arg("--test")
-        .arg("suite")
-        .arg("breakwater_suite")
-        .arg("--")
-        .arg("--exact")
-        .env("BREAKWATER_REPORT", &report_path)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::inherit());
+    let mut env: Vec<(&str, std::ffi::OsString)> =
+        vec![("BREAKWATER_REPORT", report_path.clone().into_os_string())];
     if let Some(seed) = params.seed {
-        cmd.env("BREAKWATER_SEED", seed.to_string());
+        env.push(("BREAKWATER_SEED", seed.to_string().into()));
     }
     if let Some(steps) = params.steps {
-        cmd.env("BREAKWATER_STEPS", steps);
+        env.push(("BREAKWATER_STEPS", steps.into()));
     }
     if let Some(auth) = params.auth {
-        cmd.env("BREAKWATER_AUTH", auth);
+        env.push(("BREAKWATER_AUTH", auth.into()));
     }
-    let status = cmd.status().context("running cargo test")?;
+    let status = run_test(
+        dir,
+        &TestRun {
+            test: "breakwater_suite",
+            features: None,
+            env,
+            nocapture: false,
+        },
+    )?;
 
     let report = match std::fs::read_to_string(&report_path) {
         Ok(json) => serde_json::from_str::<RunReport>(&json).context("parsing the suite report")?,

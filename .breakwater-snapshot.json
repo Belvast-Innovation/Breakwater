@@ -1,0 +1,173 @@
+{
+  "format": 1,
+  "toolchain": {
+    "soroban_sdk": "28.0.0",
+    "soroban_env_host": "28.0.2",
+    "breakwater": "0.1.0"
+  },
+  "suites": {
+    "ttl-archival-budget": {
+      "seed": 7,
+      "cases": 32,
+      "steps": "1..=20",
+      "auth": "mock",
+      "mode": "native",
+      "workload_digest": "fnv1a64:074930d8f0fef7d0",
+      "handlers": {
+        "cancel": {
+          "samples": 41,
+          "contract_events_size_bytes": {
+            "max": 472,
+            "p50": 472
+          },
+          "disk_read_bytes": {
+            "max": 92,
+            "p50": 0
+          },
+          "disk_read_entries": {
+            "max": 1,
+            "p50": 0
+          },
+          "instructions": {
+            "max": 445727,
+            "p50": 408243
+          },
+          "mem_bytes": {
+            "max": 80744,
+            "p50": 65716
+          },
+          "memory_read_entries": {
+            "max": 8,
+            "p50": 8
+          },
+          "persistent_entry_rent_bumps": {
+            "max": 3,
+            "p50": 3
+          },
+          "persistent_rent_ledger_bytes": {
+            "max": 139345920,
+            "p50": 34836480
+          },
+          "temporary_entry_rent_bumps": {
+            "max": 1,
+            "p50": 1
+          },
+          "temporary_rent_ledger_bytes": {
+            "max": 454463928,
+            "p50": 454463928
+          },
+          "write_bytes": {
+            "max": 1128,
+            "p50": 1128
+          },
+          "write_entries": {
+            "max": 5,
+            "p50": 5
+          }
+        },
+        "create_stream": {
+          "samples": 125,
+          "contract_events_size_bytes": {
+            "max": 236,
+            "p50": 236
+          },
+          "disk_read_bytes": {
+            "max": 0,
+            "p50": 0
+          },
+          "disk_read_entries": {
+            "max": 1,
+            "p50": 0
+          },
+          "instructions": {
+            "max": 281505,
+            "p50": 247005
+          },
+          "mem_bytes": {
+            "max": 58643,
+            "p50": 39610
+          },
+          "memory_read_entries": {
+            "max": 7,
+            "p50": 7
+          },
+          "persistent_entry_rent_bumps": {
+            "max": 4,
+            "p50": 3
+          },
+          "persistent_rent_ledger_bytes": {
+            "max": 665831884,
+            "p50": 214548096
+          },
+          "temporary_entry_rent_bumps": {
+            "max": 1,
+            "p50": 1
+          },
+          "temporary_rent_ledger_bytes": {
+            "max": 454463928,
+            "p50": 454463928
+          },
+          "write_bytes": {
+            "max": 1120,
+            "p50": 1120
+          },
+          "write_entries": {
+            "max": 5,
+            "p50": 5
+          }
+        },
+        "withdraw": {
+          "samples": 42,
+          "contract_events_size_bytes": {
+            "max": 236,
+            "p50": 236
+          },
+          "disk_read_bytes": {
+            "max": 92,
+            "p50": 0
+          },
+          "disk_read_entries": {
+            "max": 1,
+            "p50": 0
+          },
+          "instructions": {
+            "max": 270023,
+            "p50": 240886
+          },
+          "mem_bytes": {
+            "max": 52622,
+            "p50": 40994
+          },
+          "memory_read_entries": {
+            "max": 7,
+            "p50": 7
+          },
+          "persistent_entry_rent_bumps": {
+            "max": 2,
+            "p50": 2
+          },
+          "persistent_rent_ledger_bytes": {
+            "max": 123863040,
+            "p50": 15482880
+          },
+          "temporary_entry_rent_bumps": {
+            "max": 1,
+            "p50": 1
+          },
+          "temporary_rent_ledger_bytes": {
+            "max": 454463928,
+            "p50": 454463928
+          },
+          "write_bytes": {
+            "max": 904,
+            "p50": 904
+          },
+          "write_entries": {
+            "max": 4,
+            "p50": 4
+          }
+        }
+      }
+    }
+  }
+}

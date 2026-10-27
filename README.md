@@ -34,12 +34,13 @@
 <!-- ANCHOR: intro -->
 Breakwater is a Rust framework and CLI for stateful property testing of Stellar smart contracts. You declare *actors* (who can call), *handlers* (what they can call) and *invariants* (what must always hold). Breakwater generates randomized multi-step transaction sequences against a local Soroban `Env`, checks every invariant after every step, shrinks any failing sequence to its minimal form, and exports it as a reproducible Rust unit test.
 
-It ships with two **attack packs** for risks that are specific to Stellar:
+It ships with three **attack packs** for risks that are specific to Stellar:
 
 | Attack pack | Risk it hunts | Why it matters |
 | --- | --- | --- |
 | `policy-bypass` | Multi-step sequences that slip past OpenZeppelin smart-account policies (spending limits, context rules, signer scopes) | These policies are the safety layer for AI-agent wallets paying over x402 / MPP. A policy that holds for one transaction may fail for five. |
 | `ttl-archival` | Contract state that expires under Soroban's TTL-based state archival while the business logic still depends on it | A one-year payment stream whose storage entry is archived at month six is a correctness bug no EVM tool knows to look for. |
+| `budget-snapshot` | Resource regressions: a change that makes a handler read, write, emit or rent more than before, without breaking any functional test | An extra storage write passes every test and still makes each call dearer. A committed snapshot of per-handler resources turns that into a failing CI check. |
 
 > **Status:** HackMeridian 2026 submission (Genesis path · Stellar Unlocked track). Built 25–26 October 2026 in Lisbon. See [Prior work and hackathon scope](#prior-work-and-hackathon-scope).
 >
@@ -124,6 +125,7 @@ This installs a binary named `breakwater`. To write a suite, add the core librar
 soroban-breakwater = "0.1"
 breakwater-pack-policy-bypass = "0.1"
 breakwater-pack-ttl-archival = "0.1"
+breakwater-pack-budget-snapshot = "0.1"
 ```
 
 The core package is named `soroban-breakwater` because the name `breakwater` is already taken on crates.io. Its library is still called `breakwater`, so in code you write `use breakwater::...`.
@@ -299,6 +301,48 @@ Advances the ledger according to a usage profile (`LedgerAdvance::daily_then_sil
 What expiry means on Soroban since Protocol 23: an archived persistent or instance entry is not lost, and a call that touches it does not simply fail. The next transaction that touches an archived entry must restore it (simulation adds the entry to the transaction's restore list) and pay for the restoration, a transaction built without the restore fails, and a contract that never extends TTL sees the entry archived again after every quiet period of at least the minimum TTL. The pack therefore reads each entry's `live_until` directly from the ledger entries, because any contract read, and the SDK's own `get_ttl` test helper, would restore the entry and hide the finding.
 
 The bundled demo (`examples/ttl-archival`) is a payment stream that keeps streams in persistent storage and never calls `extend_ttl`. Under the profile above, a one-year stream is archived after the quiet quarter with 275 days left to run; `PaymentStreamFixed`, which extends every touched entry to the stream's remaining duration, survives the same profile. Two more suites in `examples/ttl-archival/tests/` drive the other invariants: with seed 5, `NoUnboundedTtlExtension` shrinks to 3 steps in which anyone's call to the unauthenticated `bump_ttl` keeps a stream alive 1.3 days past its end; with seed 3, `RestoreCostWithinBudget` shrinks to 4 steps in which one `withdraw_many` after a quiet quarter reads 5 entries from disk against a budget of 3. That 3 is a threshold the suite sets, not a network limit.
+### `budget-snapshot`
+
+A resource snapshot and CI gate in the spirit of `forge snapshot`. It does not look for a violation: it measures what every handler of a suite costs, stores `max` and `p50` per resource in a file you commit, and fails when a later run is over it. The twelve resources are the ones the host meters per invocation: instructions, memory, disk and in-memory read entries, write entries, read and written bytes, contract event size, and persistent and temporary rent (ledger-bytes and bumped entries).
+
+```bash
+# Record the baseline (writes .breakwater-snapshot.json in the current directory)
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --seed 7
+
+# Check a later run against it: exit 0 within the tolerance, 1 on a regression
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --tolerance 2.5%
+
+# The demo regression: `withdraw` also writes a receipt entry (feature `regress-demo`)
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --features regress-demo
+```
+
+Real output of the last command (abridged), exit code 1:
+
+```
+suite: ttl-archival-budget   seed: 7   cases: 32   steps: 1..=20   auth: mock
+mode: native   tolerance: 5%
+────────────────────────────────────────────────────────────────────────
+  withdraw         instructions                 max       270023 -> 309412         +14.5%  REGRESSION
+  withdraw         write_entries                max            4 -> 5              +25.0%  REGRESSION
+  withdraw         write_bytes                  max          904 -> 1016           +12.3%  REGRESSION
+  withdraw         persistent_entry_rent_bumps  max            2 -> 3              +50.0%  REGRESSION
+14 value(s) over the tolerance and 0 sample count change(s) in 1 handler(s)
+```
+
+Within the default 5% tolerance only `withdraw` is reported. With `--tolerance 0%`, as in this repository's CI, `create_stream` and `cancel` are listed as well, with small increases in `instructions` and `mem_bytes` (at most 2.5%) and none in the storage figures. Their code is unchanged: the increase is an effect of the test host, explained under "What depends on what" below. `--check` replays the seed, step range and authorization mode stored in the snapshot, so it takes no `--seed`, `--steps` or `--auth`. The default tolerance is 5%, which suits local use; this repository's CI uses `--tolerance 0%` as a strict gate.
+
+Exit codes: `0` recorded, or every value within the tolerance (improvements are only reported); `1` a value is over the tolerance, or a handler measured a different number of successful calls under the same workload; `2` usage or configuration error, including a snapshot file that is missing or malformed, and a stale snapshot: other `soroban-sdk` or `soroban-env-host` version, other seed, cases, step range, authorization or metering mode, a changed generated workload (a digest of the executed steps is stored), or a different set of handlers. A stale snapshot is never compared; record it again when the change is intended.
+
+To measure your own suite, add a `breakwater_snapshot` test next to `breakwater_suite` in `tests/suite.rs`: wrap each handler with `Recorder::handler(handler, Target::new(contract, "function"))`, add `recorder.invariant()` (a suite needs at least one), run, then `recorder.finish(&config, &report)` and `write_if_requested()`. The measured call must be the last top-level call the handler makes, because the host reports only the last one; a handler that calls the contract again afterwards makes the measurement fail instead of misreading it. A handler that reports success without calling the contract at all makes it fail too, and is not credited with the previous step's call. Failed calls are not measured.
+
+What the numbers mean. The snapshot's `mode` is `native`: the contract runs as Rust code in the test host. In this mode the storage-related figures (read and write entries and bytes, event size, rent) follow the contract's behaviour directly, so a new storage write, a larger entry or an extra event shows up as it would on the network. `instructions` and `mem_bytes` leave out Wasm instantiation and VM execution, and no figure includes the transaction's own size: use them only to compare one revision of the same code base with another, never as an on-chain fee. The numbers come from the host's cost model, not from a clock, and the generated workload is fixed by the seed, so under the same locked dependencies the figures are identical value for value on any machine. This has been verified on two platforms: the demo baseline was recorded on x86_64 Linux, this repository's CI (ubuntu-latest, x86_64) passes the check against it with a 0% tolerance, and a re-recording on aarch64 macOS (Apple Silicon) is byte-identical to the committed file.
+
+**What depends on what.** The storage-related figures (`write_entries`, `write_bytes`, `disk_read_entries`, `disk_read_bytes`, `memory_read_entries`, event size, rent) are computed from the call's own footprint. They depend on the handler and the entries it touches, and on nothing else in the test ledger. `instructions` and `mem_bytes` also depend on history. The test host keeps every ledger entry the `Env` has touched in an ordered map that is copied on every write, so a call costs more the more entries were touched before it: about 280 instructions per touched entry for a call that writes one entry, roughly 2,100 to 2,600 for one that writes five. It makes no difference whether the entries were written by setup, by earlier steps or by another contract, whether they are persistent or temporary, or whether they are the nonce entries that mocked authorization creates for every authorized call. Entries that exist only in the ledger snapshot count for nothing until something touches them.
+
+Measured on the ttl-archival demo by padding the ledger with 0, 10, 100, 300 and 1000 unrelated entries before the same three calls: `create_stream` took 232,966, 258,631, 461,918, 887,738 and 2,368,498 instructions, with write entries, written bytes and read entries identical in every row. Padding that exists only in the snapshot changed nothing: with 0 or with 1000 such entries the three calls took 230,852, 227,924 and 389,526 instructions. On the network a transaction loads only the entries of its own footprint into this map, so the history part of `instructions` and `mem_bytes` belongs to the test environment, not to the contract.
+
+**Reading a 0% result.** A change that adds entries early in a sequence, such as the receipt `withdraw` writes in the demo, also raises `instructions` and `mem_bytes` of later handlers you did not touch, by a few percent at most in the demo, while no storage figure moves for them. Look first at the handler whose storage figures moved; that is the change. An increase in `instructions` or `mem_bytes` alone, in a handler whose storage figures are unchanged, is only worth chasing if it is large or that handler's code changed. Even an unchanged contract gets dearer along a sequence under mocked authorization: in the demo the same `cancel` takes 392,838 instructions with no withdrawal before it and 428,045 after sixteen. The snapshot therefore describes each handler in the states the seed produces, and changing the seed, the step range or the handlers changes the figures (the workload digest turns that into a stale snapshot instead of a false regression). Separate tolerances for the storage figures and for `instructions` and `mem_bytes` are planned in [#32](https://github.com/Belvast-Innovation/Breakwater/issues/32).
 <!-- ANCHOR_END: attack-packs -->
 
 ## How Stellar is used
@@ -342,10 +386,11 @@ The stream's expiry itself cannot be waited for within the hackathon: Testnet's 
 Breakwater/
 ├── crates/
 │   ├── breakwater/                  # core library: Suite, Handler, Invariant, replay, JSON export
-│   ├── breakwater-cli/              # `breakwater run | export | report`
+│   ├── breakwater-cli/              # `breakwater run | export | report | snapshot`
 │   └── packs/
 │       ├── policy-bypass/           # invariants, generators and real-auth entries for OZ smart accounts
-│       └── ttl-archival/            # TTL probes, stream model and archival invariants
+│       ├── ttl-archival/            # TTL probes, stream model and archival invariants
+│       └── budget-snapshot/         # per-handler resource sampling, snapshot file and regression check
 ├── examples/
 │   ├── policy-bypass/               # DemoAccount: an OZ smart account with a mis-sized spending window
 │   │   ├── contracts/
@@ -355,6 +400,7 @@ Breakwater/
 │   │   └── tests/                   # suite.rs, common/ (fixture, handlers), repro_policy_bypass_7.rs
 │   └── ttl-archival/                # PaymentStream (never extends TTL) and PaymentStreamFixed
 │       └── tests/                   # suite.rs, common/, repro_ttl_archival_11.rs
+├── .breakwater-snapshot.json        # resource baseline of the ttl-archival demo (`breakwater snapshot --check`)
 ├── scripts/
 │   └── replay-testnet.sh            # replays an exported sequence on Testnet
 ├── site/                            # breakwater.belvast.de: landing page, mdBook docs (book/), build.sh
@@ -398,6 +444,7 @@ Where AI meaningfully generated code or content:
 | --- | --- | --- |
 | Core library (`crates/breakwater`) | Boilerplate for trait definitions, `proptest-state-machine` wiring, error types | Design of the `Handler` / `Invariant` / `Suite` API, shrinking strategy, review of every file |
 | Attack packs | First drafts of invariant implementations from written specs | Threat modelling, choice of invariants, verification against real contracts |
+| `budget-snapshot` pack and `breakwater snapshot` | Design proposal, first drafts of the sampling wrapper, statistics, snapshot file model, comparison logic, the `snapshot` command, their tests and this documentation | Decisions on what is measured and how, the file format, exit codes and tolerance semantics; review of the plan and of the diff |
 | Demo contracts | Scaffolding from OpenZeppelin examples | Deliberate misconfigurations, TTL bug |
 | CLI, report output, HTML report and Testnet replay scripts | Argument parsing, report formatting, first drafts of the `run` / `export` / `report` commands, the HTML renderer and `scripts/replay-testnet.sh` | UX decisions, pipeline design (how the CLI drives a suite, how an agent-signed authorization entry is spliced into a transaction), on-chain verification |
 | Logo | Generated with Google Nano Banana (Gemini image model) from the author's prompt | Concept (a wave breaking on a breakwater tetrapod), selection, cropping |
@@ -414,7 +461,7 @@ Stellar documentation was pulled into the AI context through the official **Rave
 
 - Rule-rotation probe for `policy-bypass`: generate `remove_context_rule` + `add_context_rule` under real auth, since a re-created rule starts `SpendingLimit` with an empty history
 - Malicious keep-alive: bias generators toward unbounded `extend_ttl` calls on every public entry point, building on `NoUnboundedTtlExtension`
-- Restoration-cost budget as a CI gate: per-step resource ceilings from `RestoreCostWithinBudget`, compared run over run
+- Done: resource budgets as a CI gate, compared run over run, as the [`budget-snapshot`](#budget-snapshot) pack. Still open: hard per-step ceilings from `RestoreCostWithinBudget` in the same file, and a Wasm metering mode
 - Export of `stellar-cli` replay scripts and unsigned transaction XDR next to the Rust reproduction
 
 **Later**

@@ -1,13 +1,15 @@
 //! `breakwater` command-line interface.
 //!
 //! Exit codes follow `docs/ARCHITECTURE.md` §6: `0` all invariants held,
-//! `1` a violation was found, `2` usage or configuration error.
+//! `1` a violation was found, `2` usage or configuration error. `snapshot`
+//! uses the same codes: `1` is a resource regression.
 #![forbid(unsafe_code)]
 
 mod driver;
 mod export;
 mod html;
 mod render;
+mod snapshot;
 mod style;
 
 use std::path::PathBuf;
@@ -40,6 +42,8 @@ enum Command {
     Export(ExportArgs),
     /// Render a JSON run report in the terminal or as a static HTML page.
     Report(ReportArgs),
+    /// Record per-handler resource usage, or check it against the recorded snapshot.
+    Snapshot(snapshot::SnapshotArgs),
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -112,6 +116,7 @@ fn main() -> ExitCode {
         Command::Run(args) => run(&style, args),
         Command::Export(args) => export(&style, args),
         Command::Report(args) => report(&style, args),
+        Command::Snapshot(args) => snapshot::run(&style, args),
     };
     match result {
         Ok(code) => ExitCode::from(code),

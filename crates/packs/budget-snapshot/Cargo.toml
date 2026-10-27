@@ -1,0 +1,22 @@
+[package]
+name = "breakwater-pack-budget-snapshot"
+description = "Breakwater attack pack: per-handler resource snapshots and a regression gate for Soroban contracts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage = "https://breakwater.belvast.de"
+documentation = "https://docs.rs/breakwater-pack-budget-snapshot"
+readme = "README.md"
+keywords = ["soroban", "stellar", "fuzzing", "benchmark", "regression"]
+categories = ["development-tools::testing"]
+include = ["src/**", "README.md", "LICENSE", "NOTICE"]
+publish = true
+
+[dependencies]
+breakwater = { workspace = true }
+soroban-sdk = { workspace = true, features = ["testutils"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

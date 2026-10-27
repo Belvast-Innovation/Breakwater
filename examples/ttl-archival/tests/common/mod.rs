@@ -20,6 +20,7 @@ use breakwater::{
     Actor, AuthMode, CallContext, CallOutcome, Handler, HandlerError, LedgerAdvance, ReplayStep,
     RunReport, Suite, SuiteConfig, LEDGERS_PER_DAY,
 };
+use breakwater_pack_budget_snapshot::{Recorder, Target};
 use breakwater_pack_ttl_archival::{
     InstanceAlive, NoMidLifecycleExpiry, NoUnboundedTtlExtension, ResourceBudget,
     RestoreCostWithinBudget, RestoreRestoresFunction, StreamModel,
@@ -558,4 +559,60 @@ pub fn restore_cost_suite(
             budget,
         ))
         .on_restore(move |env| restore_native(env, &hook_fx))
+}
+
+/// Configuration of the budget-snapshot suite: seed 7, up to twenty one-day
+/// steps, so every stream stays inside the 30-day minimum TTL and no call pays
+/// for restoring an archived entry. Restoration cost is the business of
+/// `RestoreCostWithinBudget`; this suite measures the contract's own logic.
+pub fn snapshot_config() -> SuiteConfig {
+    SuiteConfig {
+        seed: 7,
+        steps: 1..=20,
+        cases: 32,
+        auth: AuthMode::MockAll,
+        ..SuiteConfig::default()
+    }
+}
+
+/// A suite that only measures: every handler of the buggy contract wrapped in
+/// a [`Recorder`], one day between steps, and no invariant that can fire.
+pub fn snapshot_suite(config: SuiteConfig) -> (Suite, Recorder) {
+    let (env, fx) = setup(Variant::Buggy);
+    let fx = Arc::new(fx);
+    let sender = Actor::from_address("sender", &addr(&env, &fx.sender));
+    let recipient = Actor::from_address("recipient", &addr(&env, &fx.recipient));
+    let recorder = Recorder::new();
+    let target = |function: &'static str| Target::new(fx.contract.clone(), function);
+    let hook_fx = fx.clone();
+    let suite = Suite::new("ttl-archival-budget", env)
+        .config(config)
+        .ledger_advance(LedgerAdvance::Fixed {
+            ledgers: LEDGERS_PER_DAY,
+            seconds: 86_400,
+        })
+        .handler(recorder.handler(
+            CreateStream {
+                fx: fx.clone(),
+                actors: vec![sender.clone()],
+            },
+            target("create_stream"),
+        ))
+        .handler(recorder.handler(
+            Withdraw {
+                fx: fx.clone(),
+                actors: vec![recipient],
+            },
+            target("withdraw"),
+        ))
+        .handler(recorder.handler(
+            Cancel {
+                fx: fx.clone(),
+                actors: vec![sender],
+            },
+            target("cancel"),
+        ))
+        .invariant(recorder.invariant())
+        .on_restore(move |env| restore_native(env, &hook_fx));
+    (suite, recorder)
 }
