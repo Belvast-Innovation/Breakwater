@@ -312,6 +312,15 @@ The bundled demo (`examples/ttl-archival`) is a payment stream that keeps stream
 
 A resource snapshot and CI gate in the spirit of `forge snapshot`. It does not look for a violation: it measures what every handler of a suite costs, stores `max` and `p50` per resource in a file you commit, and fails when a later run is over it. The twelve resources are the ones the host meters per invocation: instructions, memory, disk and in-memory read entries, write entries, read and written bytes, contract event size, and persistent and temporary rent (ledger-bytes and bumped entries).
 
+The twelve resources fall into two classes, because they move for different reasons:
+
+<!-- resource-classes:start -->
+- storage: `disk_read_entries`, `memory_read_entries`, `write_entries`, `disk_read_bytes`, `write_bytes`, `contract_events_size_bytes`, `persistent_rent_ledger_bytes`, `persistent_entry_rent_bumps`, `temporary_rent_ledger_bytes`, `temporary_entry_rent_bumps`
+- compute: `instructions`, `mem_bytes`
+<!-- resource-classes:end -->
+
+The storage figures follow the call's own footprint. `instructions` and `mem_bytes` also follow the history of the test `Env` (see "What depends on what" below), so `--check` can hold the two classes to different tolerances.
+
 ```bash
 # Record the baseline (writes .breakwater-snapshot.json in the current directory)
 cargo run -p breakwater-cli -- snapshot examples/ttl-archival --seed 7
@@ -320,36 +329,56 @@ cargo run -p breakwater-cli -- snapshot examples/ttl-archival --seed 7
 cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check
 cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --tolerance 2.5%
 
-# The demo regression: `withdraw` also writes a receipt entry (feature `regress-demo`)
-cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --features regress-demo
+# One tolerance per class, as in this repository's CI
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --tolerance storage=0%,compute=5%
+
+# The demo regressions: `withdraw` also writes a receipt entry (feature `regress-demo`),
+# and `cancel` also hashes a buffer twelve times, which costs CPU only (feature `regress-compute`)
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --tolerance storage=0%,compute=5% --features regress-demo
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --tolerance storage=0%,compute=5% --features regress-compute
 ```
 
-Real output of the last command (abridged), exit code 1:
+Real output of the `regress-demo` check (abridged), exit code 1:
 
 ```
 suite: ttl-archival-budget   seed: 7   cases: 32   steps: 1..=20   auth: mock
-mode: native   tolerance: 5%
+mode: native   tolerance: storage 0%, compute 5%
 ────────────────────────────────────────────────────────────────────────
-  withdraw         instructions                 max       270023 -> 309412         +14.5%  REGRESSION
-  withdraw         write_entries                max            4 -> 5              +25.0%  REGRESSION
-  withdraw         write_bytes                  max          904 -> 1016           +12.3%  REGRESSION
-  withdraw         persistent_entry_rent_bumps  max            2 -> 3              +50.0%  REGRESSION
-14 value(s) over the tolerance and 0 sample count change(s) in 1 handler(s)
+  withdraw         instructions                 max       270023 -> 309412         +14.5%  REGRESSION  limit 5% (compute)
+  withdraw         write_entries                max            4 -> 5              +25.0%  REGRESSION  limit 0% (storage)
+  withdraw         write_bytes                  max          904 -> 1016           +12.3%  REGRESSION  limit 0% (storage)
+  withdraw         persistent_entry_rent_bumps  max            2 -> 3              +50.0%  REGRESSION  limit 0% (storage)
+14 value(s) over the tolerance (storage 10, compute 4) and 0 sample count change(s) in 1 handler(s)
 ```
 
-Within the default 5% tolerance only `withdraw` is reported. With `--tolerance 0%`, as in this repository's CI, `create_stream` and `cancel` are listed as well, with small increases in `instructions` and `mem_bytes` (at most 2.5%) and none in the storage figures. Their code is unchanged: the increase is an effect of the test host, explained under "What depends on what" below. `--check` replays the seed, step range and authorization mode stored in the snapshot, so it takes no `--seed`, `--steps` or `--auth`. The default tolerance is 5%, which suits local use; this repository's CI uses `--tolerance 0%` as a strict gate.
+Real output of the `regress-compute` check, exit code 1:
 
-Exit codes: `0` recorded, or every value within the tolerance (improvements are only reported); `1` a value is over the tolerance, or a handler measured a different number of successful calls under the same workload; `2` usage or configuration error, including a snapshot file that is missing or malformed, and a stale snapshot: other `soroban-sdk` or `soroban-env-host` version, other seed, cases, step range, authorization or metering mode, a changed generated workload (a digest of the executed steps is stored), or a different set of handlers. A stale snapshot is never compared; record it again when the change is intended.
+```
+suite: ttl-archival-budget   seed: 7   cases: 32   steps: 1..=20   auth: mock
+mode: native   tolerance: storage 0%, compute 5%
+────────────────────────────────────────────────────────────────────────
+  cancel           instructions                 max       445727 -> 526939         +18.2%  REGRESSION  limit 5% (compute)
+  cancel           instructions                 p50       408243 -> 489455         +19.8%  REGRESSION  limit 5% (compute)
+2 value(s) over the tolerance (storage 0, compute 2) and 0 sample count change(s) in 1 handler(s)
+```
+
+**Tolerances.** `--tolerance` takes either a bare percentage for every resource (`--tolerance 2.5%`; the default is 5%) or a comma-separated list that sets a class or a single resource: `--tolerance storage=0%,compute=5%`, `--tolerance 5%,storage=0%,instructions=3%`. A resource beats its class, a class beats a bare percentage, and what is not set is 5%. Each key, and the bare percentage, may appear once, and so may the option itself; a list that does not parse (an unknown or repeated key, an empty item, a bad percentage) is a usage error, exit code `2`, reported before anything is built. Every line over the tolerance ends with the limit it was judged by, such as `limit 0% (storage)`, and the summary counts both classes. The tolerances are not stored in the snapshot: they are the policy of the command that checks, so the same baseline can be held strictly in CI and loosely on a laptop. `--check` replays the seed, step range and authorization mode stored in the snapshot, so it takes no `--seed`, `--steps` or `--auth`.
+
+**The CI setting.** This repository's CI uses `--tolerance storage=0%,compute=5%`. Storage is held at exactly 0% because those figures do not move unless the code does. Compute gets 5% because the side effect of one handler's change on handlers nobody touched was at most +2.5% at seed 7 and +3.5% across seeds 1, 3, 7 and 11 on the demo, while `regress-compute` moves `instructions` by +18.2%. With a single `--tolerance 0%`, which CI used before, `regress-demo` lists `create_stream` and `cancel` as well (21 values in 3 handlers instead of 14 in one), with small increases in `instructions` and `mem_bytes` and none in the storage figures; their code is unchanged and the increase is an effect of the test host, explained under "What depends on what" below. The price of the compute tolerance is that a CPU-only regression below it passes: one more hash, for example, costs the demo's `cancel` about 1.5%.
+
+`regress-compute` is the regression a gate on the storage figures alone cannot see. `cancel` hashes a buffer twelve times, which costs CPU and reads, writes and emits nothing, so no storage figure moves: `--tolerance storage=0%,compute=100000%` exits `0`, and the tiered gate exits `1` with only the two `instructions` lines above. The hashing goes through the host on purpose. In `native` mode the contract's own Rust code is not metered, only the host calls it makes, so a plain loop would not move any figure; this also means the compute class is blind to a regression in pure Rust arithmetic until a Wasm metering mode exists.
+
+Exit codes: `0` recorded, or every value within the tolerance (improvements are only reported); `1` a value is over the tolerance, or a handler measured a different number of successful calls under the same workload; `2` usage or configuration error, including a `--tolerance` list that does not parse, a snapshot file that is missing or malformed, and a stale snapshot: other `soroban-sdk` or `soroban-env-host` version, other seed, cases, step range, authorization or metering mode, a changed generated workload (a digest of the executed steps is stored), or a different set of handlers. A stale snapshot is never compared; record it again when the change is intended.
 
 To measure your own suite, add a `breakwater_snapshot` test next to `breakwater_suite` in `tests/suite.rs`: wrap each handler with `Recorder::handler(handler, Target::new(contract, "function"))`, add `recorder.invariant()` (a suite needs at least one), run, then `recorder.finish(&config, &report)` and `write_if_requested()`. The measured call must be the last top-level call the handler makes, because the host reports only the last one; a handler that calls the contract again afterwards makes the measurement fail instead of misreading it. A handler that reports success without calling the contract at all makes it fail too, and is not credited with the previous step's call. Failed calls are not measured.
 
-What the numbers mean. The snapshot's `mode` is `native`: the contract runs as Rust code in the test host. In this mode the storage-related figures (read and write entries and bytes, event size, rent) follow the contract's behaviour directly, so a new storage write, a larger entry or an extra event shows up as it would on the network. `instructions` and `mem_bytes` leave out Wasm instantiation and VM execution, and no figure includes the transaction's own size: use them only to compare one revision of the same code base with another, never as an on-chain fee. The numbers come from the host's cost model, not from a clock, and the generated workload is fixed by the seed, so under the same locked dependencies the figures are identical value for value on any machine. This has been verified on two platforms: the demo baseline was recorded on x86_64 Linux, this repository's CI (ubuntu-latest, x86_64) passes the check against it with a 0% tolerance, and a re-recording on aarch64 macOS (Apple Silicon) is byte-identical to the committed file.
+What the numbers mean. The snapshot's `mode` is `native`: the contract runs as Rust code in the test host. In this mode the storage-related figures (read and write entries and bytes, event size, rent) follow the contract's behaviour directly, so a new storage write, a larger entry or an extra event shows up as it would on the network. `instructions` and `mem_bytes` leave out Wasm instantiation and VM execution, and no figure includes the transaction's own size: use them only to compare one revision of the same code base with another, never as an on-chain fee. The numbers come from the host's cost model, not from a clock, and the generated workload is fixed by the seed, so under the same locked dependencies the figures are identical value for value on any machine. This has been verified on two platforms: the demo baseline was recorded on x86_64 Linux, this repository's CI (ubuntu-latest, x86_64) passes the check against it (with the tiered tolerance as well as with a single 0%), and a re-recording on aarch64 macOS (Apple Silicon) is byte-identical to the committed file.
 
 **What depends on what.** The storage-related figures (`write_entries`, `write_bytes`, `disk_read_entries`, `disk_read_bytes`, `memory_read_entries`, event size, rent) are computed from the call's own footprint. They depend on the handler and the entries it touches, and on nothing else in the test ledger. `instructions` and `mem_bytes` also depend on history. The test host keeps every ledger entry the `Env` has touched in an ordered map that is copied on every write, so a call costs more the more entries were touched before it: about 280 instructions per touched entry for a call that writes one entry, roughly 2,100 to 2,600 for one that writes five. It makes no difference whether the entries were written by setup, by earlier steps or by another contract, whether they are persistent or temporary, or whether they are the nonce entries that mocked authorization creates for every authorized call. Entries that exist only in the ledger snapshot count for nothing until something touches them.
 
 Measured on the ttl-archival demo by padding the ledger with 0, 10, 100, 300 and 1000 unrelated entries before the same three calls: `create_stream` took 232,966, 258,631, 461,918, 887,738 and 2,368,498 instructions, with write entries, written bytes and read entries identical in every row. Padding that exists only in the snapshot changed nothing: with 0 or with 1000 such entries the three calls took 230,852, 227,924 and 389,526 instructions. On the network a transaction loads only the entries of its own footprint into this map, so the history part of `instructions` and `mem_bytes` belongs to the test environment, not to the contract.
 
-**Reading a 0% result.** A change that adds entries early in a sequence, such as the receipt `withdraw` writes in the demo, also raises `instructions` and `mem_bytes` of later handlers you did not touch, by a few percent at most in the demo, while no storage figure moves for them. Look first at the handler whose storage figures moved; that is the change. An increase in `instructions` or `mem_bytes` alone, in a handler whose storage figures are unchanged, is only worth chasing if it is large or that handler's code changed. Even an unchanged contract gets dearer along a sequence under mocked authorization: in the demo the same `cancel` takes 392,838 instructions with no withdrawal before it and 428,045 after sixteen. The snapshot therefore describes each handler in the states the seed produces, and changing the seed, the step range or the handlers changes the figures (the workload digest turns that into a stale snapshot instead of a false regression). Separate tolerances for the storage figures and for `instructions` and `mem_bytes` are planned in [#32](https://github.com/Belvast-Innovation/Breakwater/issues/32).
+**Reading a tiered result.** Start with the storage lines. With storage held at 0%, any line there means the handler's footprint changed, and that is the change itself. A compute line (`instructions` or `mem_bytes`) is a regression in its own right when the handler's storage figures did not move and the line is over its tolerance: the handler does more work than before. That is how `regress-compute` shows up, in `cancel` alone. Next to a storage regression, small compute increases in other handlers are the history effect and not regressions: an entry added early in a sequence, such as the receipt `withdraw` writes in the demo, makes later calls dearer, by at most +3.5% across the four seeds measured, which is why they stay inside the 5% and are not listed. Even an unchanged contract gets dearer along a sequence under mocked authorization: in the demo the same `cancel` takes 392,838 instructions with no withdrawal before it and 428,045 after sixteen. The snapshot therefore describes each handler in the states the seed produces, and changing the seed, the step range or the handlers changes the figures (the workload digest turns that into a stale snapshot instead of a false regression). A compute tolerance of 5% lets a CPU-only regression below 5% through; to look for those, check with `--tolerance 0%`, where every `instructions` or `mem_bytes` line needs the reading above: look first at the handler whose storage figures moved, and treat a compute-only line as worth chasing if it is large or that handler's code changed.
 <!-- ANCHOR_END: attack-packs -->
 
 ## How Stellar is used

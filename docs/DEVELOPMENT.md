@@ -145,7 +145,9 @@ cargo run -p breakwater-cli -- run examples/policy-bypass --seed 7 --steps 1..=1
 # record per-handler resource usage, then check a later run against it (exit 1 on a regression)
 cargo run -p breakwater-cli -- snapshot examples/ttl-archival --seed 7
 cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check
-cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --features regress-demo   # exit 1
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --tolerance storage=0%,compute=5%   # what CI runs, exit 0
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --tolerance storage=0%,compute=5% --features regress-demo      # exit 1
+cargo run -p breakwater-cli -- snapshot examples/ttl-archival --check --tolerance storage=0%,compute=5% --features regress-compute   # exit 1
 
 # export the shrunk failure as a regression test, or render a saved report
 cargo run -p breakwater-cli -- export examples/policy-bypass --seed 7 --out examples/policy-bypass/tests/repro_policy_bypass_7.rs
