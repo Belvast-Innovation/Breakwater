@@ -11,16 +11,22 @@
 //! - [`Snapshot`]: the `.breakwater-snapshot.json` file model, keyed by suite
 //!   and handler, with the toolchain it was taken with.
 //! - [`fnv1a64`]: the digest that identifies the generated workload.
+//! - [`compare()`]: a fresh measurement against a stored suite, within a
+//!   [`Tolerance`].
 //!
 //! See `docs/ARCHITECTURE.md` §5.
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
+mod compare;
 pub mod digest;
 mod resource;
 mod snapshot;
 mod stats;
 
+pub use compare::{
+    compare, Comparison, Finding, SampleChange, StatKind, Tolerance, ToleranceError, Verdict,
+};
 pub use resource::{Resource, Sample};
 pub use snapshot::{
     Mode, Snapshot, SnapshotError, SuiteSnapshot, Toolchain, FORMAT_VERSION, SNAPSHOT_FILE,
