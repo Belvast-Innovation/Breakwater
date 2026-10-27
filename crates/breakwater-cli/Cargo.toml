@@ -1,6 +1,6 @@
 [package]
 name = "breakwater-cli"
-description = "Command-line interface for Breakwater, invariant testing for Soroban: run, export and report"
+description = "Command-line interface for Breakwater, invariant testing for Soroban: run, export, report and snapshot"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -18,11 +18,15 @@ This installs a binary named `breakwater`.
 breakwater run <suite-dir> [--seed N] [--steps 1..=20] [--auth mock|real] [--json report.json]
 breakwater export <suite-dir> --out tests/repro.rs [--seed N | --from report.json]
 breakwater report report.json [--html report.html]
+breakwater snapshot <suite-dir> [--seed N] [--steps 1..=20] [--auth mock|real] [--file .breakwater-snapshot.json]
+breakwater snapshot <suite-dir> --check [--tolerance 5%] [--file .breakwater-snapshot.json]
 ```
 
 `run` drives `cargo test --test suite` in the suite crate, so `cargo` must be on your `PATH`. It exits `0` when every invariant held, `1` when a violation was found and `2` on a usage or configuration error.
 
-The suites themselves are written against [`soroban-breakwater`](https://crates.io/crates/soroban-breakwater) and, optionally, the attack packs [`breakwater-pack-policy-bypass`](https://crates.io/crates/breakwater-pack-policy-bypass) and [`breakwater-pack-ttl-archival`](https://crates.io/crates/breakwater-pack-ttl-archival).
+`snapshot` records what every handler of a suite costs (instructions, memory, ledger entries and bytes read and written, events, rent) in `.breakwater-snapshot.json`, and with `--check` compares a later run with it. It drives the suite's `breakwater_snapshot` test the same way, replays the seed, step range and authorization mode stored in the snapshot, and uses the same exit codes: `0` within the tolerance, `1` a value over it, `2` a usage or configuration error, including a missing, malformed or stale snapshot. The default tolerance of `5%` suits local use; a CI gate can use `--tolerance 0%`. See [`breakwater-pack-budget-snapshot`](https://crates.io/crates/breakwater-pack-budget-snapshot) for how to write the test and what the numbers mean.
+
+The suites themselves are written against [`soroban-breakwater`](https://crates.io/crates/soroban-breakwater) and, optionally, the attack packs [`breakwater-pack-policy-bypass`](https://crates.io/crates/breakwater-pack-policy-bypass), [`breakwater-pack-ttl-archival`](https://crates.io/crates/breakwater-pack-ttl-archival) and [`breakwater-pack-budget-snapshot`](https://crates.io/crates/breakwater-pack-budget-snapshot).
 
 ## License
 
