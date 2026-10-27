@@ -57,7 +57,7 @@ The snapshot's `mode` is `native`: the contract runs as Rust code in the test ho
 - **No figure includes the transaction's own size.**
 - **A snapshot is the distribution a seed generates**, not an upper bound on what a handler can cost.
 
-The numbers come from the host's cost model, not from a clock, and the generated workload is fixed by the seed. By design a recording is the same bytes on any machine for the same locked dependencies.
+The numbers come from the host's cost model, not from a clock, and the generated workload is fixed by the seed. Under the same locked dependencies the figures are identical value for value on any machine; the Breakwater repository's CI verifies it with `--tolerance 0%`.
 
 See the [crate documentation](https://docs.rs/breakwater-pack-budget-snapshot).
 
