@@ -6,7 +6,13 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-publish.workspace = true
+homepage = "https://breakwater.belvast.de"
+documentation = "https://docs.rs/breakwater-pack-budget-snapshot"
+readme = "README.md"
+keywords = ["soroban", "stellar", "fuzzing", "benchmark", "regression"]
+categories = ["development-tools::testing"]
+include = ["src/**", "README.md", "LICENSE", "NOTICE"]
+publish = true
 
 [dependencies]
 breakwater = { workspace = true }

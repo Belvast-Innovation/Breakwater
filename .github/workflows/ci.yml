@@ -44,7 +44,7 @@ jobs:
       # cargo only packages files inside the crate directory, so the copies must not drift.
       - name: Check license and notice copies
         run: |
-          for crate in crates/breakwater crates/breakwater-cli crates/packs/policy-bypass crates/packs/ttl-archival; do
+          for crate in crates/breakwater crates/breakwater-cli crates/packs/policy-bypass crates/packs/ttl-archival crates/packs/budget-snapshot; do
             for file in LICENSE NOTICE; do
               cmp "$file" "$crate/$file" || { echo "::error::$crate/$file differs from $file"; exit 1; }
             done

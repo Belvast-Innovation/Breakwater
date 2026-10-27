@@ -13,7 +13,7 @@
 //! - [`Recorder`], [`Metered`] and [`Target`]: wrap a suite's handlers so that
 //!   every successful call is sampled right after it returns, and turn the
 //!   samples into a [`BudgetReport`].
-//! - [`fnv1a64`]: the digest that identifies the generated workload.
+//! - [`digest::fnv1a64`]: the digest that identifies the generated workload.
 //! - [`compare()`]: a fresh measurement against a stored suite, within a
 //!   [`Tolerance`].
 //!
