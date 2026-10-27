@@ -45,6 +45,7 @@ Thumbs.db
 # ---- AI-assistant local state (never commit session data) ----
 .claude/*
 !.claude/settings.json
+!.claude/skills/
 .cursor/
 .aider*
 
