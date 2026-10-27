@@ -108,6 +108,9 @@ jobs:
       # soroban-sdk 28 refuses a bare `cargo build --target wasm32v1-none`: its build
       # script requires the spec-shaking support that only `stellar contract build` provides.
       - uses: stellar/stellar-cli@c0f4d0da891bbf214c08b8c5035ae6db80e9a3bd # v28.1.0
+        with:
+          # Pinned by SHA, the action would take the SHA as the version to download.
+          version: 28.1.0
 
       - name: Build example contracts (wasm)
         run: |
