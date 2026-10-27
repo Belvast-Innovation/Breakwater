@@ -52,6 +52,7 @@ It ships with two **attack packs** for risks that are specific to Stellar:
 
 - [Problem](#problem)
 - [How it works](#how-it-works)
+- [Installation](#installation)
 - [Quick start](#quick-start)
 - [Writing a test](#writing-a-test)
 - [Attack packs](#attack-packs)
@@ -105,6 +106,27 @@ flowchart TD
 
 A full architecture description is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 <!-- ANCHOR_END: overview -->
+
+## Installation
+
+The packages are being prepared for crates.io and are **coming soon**; until they are published, build from a clone as shown in [Quick start](#quick-start).
+
+The command-line tool:
+
+```bash
+cargo install breakwater-cli
+```
+
+This installs a binary named `breakwater`. To write a suite, add the core library and, optionally, the attack packs to the `[dev-dependencies]` of your crate:
+
+```toml
+[dev-dependencies]
+soroban-breakwater = "0.1"
+breakwater-pack-policy-bypass = "0.1"
+breakwater-pack-ttl-archival = "0.1"
+```
+
+The core package is named `soroban-breakwater` because the name `breakwater` is already taken on crates.io. Its library is still called `breakwater`, so in code you write `use breakwater::...`.
 
 <!-- ANCHOR: quick-start -->
 ## Quick start
