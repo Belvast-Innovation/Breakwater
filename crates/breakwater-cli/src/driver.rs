@@ -64,6 +64,9 @@ pub struct TestRun<'a> {
     pub features: Option<&'a str>,
     /// Environment variables handed to the test.
     pub env: Vec<(&'a str, std::ffi::OsString)>,
+    /// Pass `--nocapture`, so what the test prints to stderr reaches the
+    /// user even when the test fails. The CLI discards the test's stdout.
+    pub nocapture: bool,
 }
 
 /// Runs `cargo test --test suite <test> -- --exact` in `dir` and returns the
@@ -79,10 +82,11 @@ pub fn run_test(dir: &Path, run: &TestRun<'_>) -> anyhow::Result<std::process::E
     if let Some(features) = run.features {
         cmd.arg("--features").arg(features);
     }
-    cmd.arg(run.test)
-        .arg("--")
-        .arg("--exact")
-        .stdin(Stdio::null())
+    cmd.arg(run.test).arg("--").arg("--exact");
+    if run.nocapture {
+        cmd.arg("--nocapture");
+    }
+    cmd.stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::inherit());
     for (key, value) in &run.env {
@@ -119,6 +123,7 @@ pub fn run(dir: &Path, params: &RunParams<'_>) -> anyhow::Result<(RunReport, Pat
             test: "breakwater_suite",
             features: None,
             env,
+            nocapture: false,
         },
     )?;
 

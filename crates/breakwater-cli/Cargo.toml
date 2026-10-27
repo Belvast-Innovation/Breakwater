@@ -23,6 +23,7 @@ doc = false
 
 [dependencies]
 breakwater = { workspace = true }
+breakwater-pack-budget-snapshot = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }

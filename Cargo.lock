@@ -344,6 +344,7 @@ name = "breakwater-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "breakwater-pack-budget-snapshot",
  "clap",
  "serde_json",
  "soroban-breakwater",
