@@ -13,6 +13,12 @@
   <a href="https://github.com/Belvast-Innovation/Breakwater/commits/main"><img src="https://img.shields.io/github/last-commit/Belvast-Innovation/Breakwater" alt="Last commit"></a>
   <a href="https://www.conventionalcommits.org/en/v1.0.0/"><img src="https://img.shields.io/badge/Conventional%20Commits-1.0.0-FE5196?logo=conventionalcommits&logoColor=white" alt="Conventional Commits 1.0.0"></a>
 </p>
+<!-- Release -->
+<p>
+  <a href="https://crates.io/crates/soroban-breakwater"><img src="https://img.shields.io/crates/v/soroban-breakwater?label=soroban-breakwater&logo=rust" alt="soroban-breakwater on crates.io"></a>
+  <a href="https://crates.io/crates/breakwater-cli"><img src="https://img.shields.io/crates/v/breakwater-cli?label=breakwater-cli&logo=rust" alt="breakwater-cli on crates.io"></a>
+  <a href="https://docs.rs/soroban-breakwater"><img src="https://img.shields.io/docsrs/soroban-breakwater?label=docs.rs&logo=docs.rs" alt="soroban-breakwater on docs.rs"></a>
+</p>
 <!-- Stack -->
 <p>
   <a href="Cargo.toml"><img src="https://img.shields.io/badge/Rust-1.91+-B7410E?logo=rust&logoColor=white" alt="Rust 1.91+"></a>
@@ -111,12 +117,12 @@ A full architecture description is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE
 
 ## Installation
 
-The packages are being prepared for crates.io and are **coming soon**; until they are published, build from a clone as shown in [Quick start](#quick-start).
+Breakwater is published on crates.io: the core library [`soroban-breakwater`](https://crates.io/crates/soroban-breakwater), the command-line tool [`breakwater-cli`](https://crates.io/crates/breakwater-cli) and the three attack packs.
 
 The command-line tool:
 
 ```bash
-cargo install breakwater-cli
+cargo install breakwater-cli --locked
 ```
 
 This installs a binary named `breakwater`. To write a suite, add the core library and, optionally, the attack packs to the `[dev-dependencies]` of your crate:
@@ -487,7 +493,8 @@ Stellar documentation was pulled into the AI context through the official **Rave
 - Shadow-state assertions: a reference model of the contract checked against the ledger after every step
 - Mainnet fork via `soroban-fork` once it supports `soroban-sdk` 28 (it currently targets 25.x)
 - AI-assisted generation of handlers and invariants from a contract's interface
-- GitHub Action packaging; publish to crates.io; apply to the Stellar Community Fund (Build / Public Goods)
+- GitHub Action packaging; apply to the Stellar Community Fund (Build / Public Goods)
+- Done: publish to crates.io, as [`soroban-breakwater`](https://crates.io/crates/soroban-breakwater) 0.1.0 and its companion crates (see [Installation](#installation))
 <!-- ANCHOR_END: roadmap -->
 
 ## Team
