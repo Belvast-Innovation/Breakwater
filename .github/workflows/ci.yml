@@ -76,6 +76,30 @@ jobs:
           test -s report.html || { echo "::error::report.html was not written"; exit 1; }
           rm -f run.json report.html
 
+      # The committed .breakwater-snapshot.json is the resource baseline of the
+      # ttl-archival demo. Metering is deterministic: for the locked dependencies
+      # the numbers are the same on every machine, so the check runs with a 0%
+      # tolerance (the CLI default of 5% is meant for local use). The contract as
+      # it stands must match the baseline exactly (exit 0), and the same suite
+      # built with the demo regression must be caught (exit 1). Exit 2 means the
+      # snapshot is missing, malformed or stale, which fails the build too.
+      - name: Check the budget snapshot
+        run: |
+          set +e
+          cli=target/debug/breakwater
+          "$cli" --no-color snapshot examples/ttl-archival --check --tolerance 0%
+          code=$?
+          if [ "$code" -ne 0 ]; then
+            echo "::error::snapshot --check --tolerance 0% exited with $code, expected 0 (record it again with 'breakwater snapshot examples/ttl-archival' if the change is intended)"
+            exit 1
+          fi
+          "$cli" --no-color snapshot examples/ttl-archival --check --tolerance 0% --features regress-demo
+          code=$?
+          if [ "$code" -ne 1 ]; then
+            echo "::error::snapshot --check --tolerance 0% --features regress-demo exited with $code, expected 1"
+            exit 1
+          fi
+
       # soroban-sdk 28 refuses a bare `cargo build --target wasm32v1-none`: its build
       # script requires the spec-shaking support that only `stellar contract build` provides.
       - uses: stellar/stellar-cli@v28.1.0
