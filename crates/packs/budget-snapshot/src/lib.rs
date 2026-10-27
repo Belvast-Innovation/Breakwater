@@ -10,6 +10,9 @@
 //!   one handler, plus the sample count.
 //! - [`Snapshot`]: the `.breakwater-snapshot.json` file model, keyed by suite
 //!   and handler, with the toolchain it was taken with.
+//! - [`Recorder`], [`Metered`] and [`Target`]: wrap a suite's handlers so that
+//!   every successful call is sampled right after it returns, and turn the
+//!   samples into a [`BudgetReport`].
 //! - [`fnv1a64`]: the digest that identifies the generated workload.
 //! - [`compare()`]: a fresh measurement against a stored suite, within a
 //!   [`Tolerance`].
@@ -20,6 +23,8 @@
 
 mod compare;
 pub mod digest;
+mod record;
+mod report;
 mod resource;
 mod snapshot;
 mod stats;
@@ -27,6 +32,8 @@ mod stats;
 pub use compare::{
     compare, Comparison, Finding, SampleChange, StatKind, Tolerance, ToleranceError, Verdict,
 };
+pub use record::{Metered, RecordOnly, Recorder, Target};
+pub use report::{BudgetError, BudgetReport, REPORT_ENV};
 pub use resource::{Resource, Sample};
 pub use snapshot::{
     Mode, Snapshot, SnapshotError, SuiteSnapshot, Toolchain, FORMAT_VERSION, SNAPSHOT_FILE,
