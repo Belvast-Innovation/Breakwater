@@ -43,7 +43,7 @@ secrets/
 Thumbs.db
 
 # ---- AI-assistant local state (never commit session data) ----
-.claude/
+.claude/*
 !.claude/settings.json
 .cursor/
 .aider*

@@ -179,3 +179,12 @@ Done on Sunday 25 October: workspace and CI, core runner with shrinking and JSON
 | Mon 11:40 | Submit. Buffer until 12:00. Do not start anything new after 11:00. |
 
 Further work is listed in the README's [Roadmap](README.md#roadmap); none of it is submission work.
+
+## 9. Cloud sessions
+
+These rules apply when Claude Code runs in a cloud session (`CLAUDE_CODE_REMOTE=true`). Everything above still applies.
+
+- **Environment.** Ubuntu 24.04 x86_64, about 4 vCPU and 16 GB RAM. A full workspace build is slow: prefer `cargo check` over `cargo build`, and scope to one crate with `-p <crate>` wherever possible. The `SessionStart` hook in `.claude/settings.json` runs `scripts/cloud-bootstrap.sh`, which pre-fetches the locked dependencies; it is a no-op locally.
+- **GitHub access.** `gh pr` and `gh issue` fail in the cloud because GraphQL requests are rejected. Use the REST API through `gh api` for every pull request and issue operation, for example `gh api repos/Belvast-Innovation/Breakwater/pulls` to list or create pull requests and `gh api repos/Belvast-Innovation/Breakwater/issues` for issues.
+- **Branches, tags and merges.** Never push to `main`. Use one branch per task, named as in §3. Do not create or push tags. Do not merge pull requests; merging is the team's decision.
+- **Testnet.** Use only identities generated inside the session, with `stellar keys generate <name> --network testnet --fund`. Never use Mainnet keys. Never commit secret keys or identity files to the repository.
