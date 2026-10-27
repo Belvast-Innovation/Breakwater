@@ -210,7 +210,25 @@ mod logic {
         env.storage()
             .persistent()
             .set(&DataKey::Stream(id), &stream);
+        // The regression the budget-snapshot compute demo is meant to catch:
+        // CPU work and nothing else.
+        #[cfg(feature = "regress-compute")]
+        burn_cpu(env);
         keep_alive::<EXTEND>(env, id, &stream);
+    }
+
+    /// Hashes a buffer `HASH_ROUNDS` times, each round on the last digest.
+    /// A native test contract's own Rust code is not metered, only the host
+    /// functions it calls are, so a plain loop would show up as no change at
+    /// all; hashing goes through the host and is charged to the CPU model.
+    /// Nothing is read, written or emitted.
+    #[cfg(feature = "regress-compute")]
+    fn burn_cpu(env: &Env) {
+        const HASH_ROUNDS: u32 = 12;
+        let mut buffer = soroban_sdk::Bytes::from_array(env, &[7u8; 64]);
+        for _ in 0..HASH_ROUNDS {
+            buffer = env.crypto().sha256(&buffer).to_bytes().into();
+        }
     }
 
     pub fn get_stream(env: &Env, id: u64) -> Stream {

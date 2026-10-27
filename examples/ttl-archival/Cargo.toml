@@ -20,6 +20,10 @@ fixed = []
 # A deliberate resource regression for the budget-snapshot demo: `withdraw`
 # also writes a receipt entry. Off by default, so the wasm build is unchanged.
 regress-demo = []
+# A deliberate compute-only regression for the budget-snapshot demo: `cancel`
+# also hashes a buffer a dozen times, which costs instructions and memory but
+# reads and writes nothing. Off by default, so the wasm build is unchanged.
+regress-compute = []
 
 [dependencies]
 soroban-sdk = { workspace = true }
