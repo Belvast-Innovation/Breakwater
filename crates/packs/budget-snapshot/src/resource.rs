@@ -72,6 +72,69 @@ impl Resource {
     pub fn from_name(name: &str) -> Option<Resource> {
         Resource::ALL.into_iter().find(|r| r.name() == name)
     }
+
+    /// The class this resource belongs to. This is the only place that
+    /// decides it; everything else (tolerance keys, help text, the
+    /// documentation check) is derived from here. Every variant is listed, so
+    /// a new resource does not compile until it has a class.
+    pub fn class(self) -> ResourceClass {
+        match self {
+            Resource::Instructions | Resource::MemBytes => ResourceClass::Compute,
+            Resource::DiskReadEntries
+            | Resource::MemoryReadEntries
+            | Resource::WriteEntries
+            | Resource::DiskReadBytes
+            | Resource::WriteBytes
+            | Resource::ContractEventsSizeBytes
+            | Resource::PersistentRentLedgerBytes
+            | Resource::PersistentEntryRentBumps
+            | Resource::TemporaryRentLedgerBytes
+            | Resource::TemporaryEntryRentBumps => ResourceClass::Storage,
+        }
+    }
+}
+
+/// A group of resources that move for the same reasons and so can share a
+/// tolerance. See [`Resource::class`].
+///
+/// - `Storage` follows the call's own footprint: entries and bytes read and
+///   written, contract event size and rent. It does not change when other
+///   entries exist in the test ledger.
+/// - `Compute` is `instructions` and `mem_bytes`, which in the test host also
+///   follow how many ledger entries the `Env` touched before the call.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum ResourceClass {
+    /// Entries and bytes read and written, event size and rent.
+    Storage,
+    /// Modelled CPU instructions and peak memory.
+    Compute,
+}
+
+impl ResourceClass {
+    /// Every class.
+    pub const ALL: &'static [ResourceClass] = &[ResourceClass::Storage, ResourceClass::Compute];
+
+    /// The name used on the command line and in reports.
+    pub fn name(self) -> &'static str {
+        match self {
+            ResourceClass::Storage => "storage",
+            ResourceClass::Compute => "compute",
+        }
+    }
+
+    /// The class with this name.
+    pub fn from_name(name: &str) -> Option<ResourceClass> {
+        ResourceClass::ALL
+            .iter()
+            .copied()
+            .find(|c| c.name() == name)
+    }
+
+    /// The resources of this class, in the order of [`Resource::ALL`].
+    pub fn resources(self) -> impl Iterator<Item = Resource> {
+        Resource::ALL.into_iter().filter(move |r| r.class() == self)
+    }
 }
 
 /// One reading of every resource, taken right after one invocation.
@@ -137,6 +200,45 @@ mod tests {
             assert!(seen.insert(resource.name()));
         }
         assert_eq!(Resource::from_name("fee"), None);
+    }
+
+    #[test]
+    fn two_resources_are_compute_and_ten_are_storage() {
+        let names = |class: ResourceClass| -> Vec<&'static str> {
+            class.resources().map(Resource::name).collect()
+        };
+        assert_eq!(names(ResourceClass::Compute), ["instructions", "mem_bytes"]);
+        assert_eq!(
+            names(ResourceClass::Storage),
+            [
+                "disk_read_entries",
+                "memory_read_entries",
+                "write_entries",
+                "disk_read_bytes",
+                "write_bytes",
+                "contract_events_size_bytes",
+                "persistent_rent_ledger_bytes",
+                "persistent_entry_rent_bumps",
+                "temporary_rent_ledger_bytes",
+                "temporary_entry_rent_bumps",
+            ]
+        );
+        // Every resource is in exactly one class.
+        let total: usize = ResourceClass::ALL
+            .iter()
+            .map(|c| c.resources().count())
+            .sum();
+        assert_eq!(total, Resource::ALL.len());
+    }
+
+    #[test]
+    fn class_names_round_trip_and_do_not_collide_with_resource_names() {
+        for class in ResourceClass::ALL {
+            assert_eq!(ResourceClass::from_name(class.name()), Some(*class));
+            assert_eq!(Resource::from_name(class.name()), None, "{}", class.name());
+        }
+        assert_eq!(ResourceClass::from_name("cpu"), None);
+        assert_eq!(ResourceClass::from_name("Storage"), None);
     }
 
     #[test]

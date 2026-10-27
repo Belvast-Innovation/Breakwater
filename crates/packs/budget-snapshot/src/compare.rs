@@ -7,10 +7,16 @@
 //! sample counts are compared: with the same generated workload, fewer or more
 //! successful calls means the contract's behaviour changed, which would let a
 //! handler quietly drop out of the measurement.
+//!
+//! [`compare`] applies one tolerance to every resource. [`compare_tiered`]
+//! takes a [`Tolerances`] instead, which can give the storage figures and
+//! `instructions` / `mem_bytes` (see [`ResourceClass`]) different tolerances,
+//! or single resources their own.
 
+use std::collections::BTreeMap;
 use std::fmt;
 
-use crate::resource::Resource;
+use crate::resource::{Resource, ResourceClass};
 use crate::snapshot::{SuiteSnapshot, Toolchain};
 
 /// How far above the baseline a value may be and still pass, in basis points.
@@ -81,6 +87,210 @@ impl fmt::Display for Tolerance {
     }
 }
 
+/// Where the tolerance that applies to a resource came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ToleranceSource {
+    /// Set for this resource by name.
+    Resource,
+    /// Set for the resource's class.
+    Class(ResourceClass),
+    /// A bare value that applies to every resource.
+    All,
+    /// Nothing was set: the default of [`Tolerance::default`].
+    Default,
+}
+
+impl ToleranceSource {
+    /// A short label for reports: the resource name, the class name, `all` or
+    /// `default`.
+    pub fn label(self, resource: Resource) -> &'static str {
+        match self {
+            ToleranceSource::Resource => resource.name(),
+            ToleranceSource::Class(class) => class.name(),
+            ToleranceSource::All => "all",
+            ToleranceSource::Default => "default",
+        }
+    }
+}
+
+/// The tolerance of every resource.
+///
+/// A resource's tolerance is the first that is set of: the one for the
+/// resource itself, the one for its [`ResourceClass`], the one for all
+/// resources, and [`Tolerance::default`]. [`Tolerances::uniform`] is the
+/// single tolerance that [`compare`] takes.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Tolerances {
+    all: Option<Tolerance>,
+    classes: BTreeMap<ResourceClass, Tolerance>,
+    resources: BTreeMap<Resource, Tolerance>,
+}
+
+/// A tolerance list that could not be parsed, see [`Tolerances::parse`].
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum TolerancesError {
+    /// An empty item, such as a leading, trailing or doubled comma.
+    #[error("empty item in the tolerance list; write items like `5%` or `storage=0%`, separated by commas")]
+    EmptyItem,
+    /// A `=` with nothing before it.
+    #[error("missing key before `=`; keys are: {keys}", keys = Tolerances::keys())]
+    MissingKey,
+    /// A key that is neither a class nor a resource.
+    #[error("unknown tolerance key `{0}`; keys are: {keys}", keys = Tolerances::keys())]
+    UnknownKey(String),
+    /// A value that is not a percentage.
+    #[error("{}", value_message(.key, .source))]
+    Value {
+        /// The key the value was given for; `None` for a bare value.
+        key: Option<String>,
+        /// Why the value was rejected.
+        source: ToleranceError,
+    },
+    /// The same class or resource twice.
+    #[error("the tolerance for `{0}` is given more than once")]
+    DuplicateKey(String),
+    /// More than one bare value.
+    #[error("more than one tolerance without a key; give at most one")]
+    DuplicateAll,
+}
+
+fn value_message(key: &Option<String>, source: &ToleranceError) -> String {
+    match key {
+        Some(key) => format!("tolerance for `{key}`: {source}"),
+        None => format!(
+            "{source}; to set one class or resource write KEY=PERCENTAGE, with KEY one of: {}",
+            Tolerances::keys()
+        ),
+    }
+}
+
+impl Tolerances {
+    /// `tolerance` for every resource.
+    pub fn uniform(tolerance: Tolerance) -> Tolerances {
+        Tolerances {
+            all: Some(tolerance),
+            ..Tolerances::default()
+        }
+    }
+
+    /// Sets the tolerance of every resource of `class`, replacing an earlier
+    /// one for the same class.
+    #[must_use]
+    pub fn with_class(mut self, class: ResourceClass, tolerance: Tolerance) -> Tolerances {
+        self.classes.insert(class, tolerance);
+        self
+    }
+
+    /// Sets the tolerance of one resource, replacing an earlier one for the
+    /// same resource.
+    #[must_use]
+    pub fn with_resource(mut self, resource: Resource, tolerance: Tolerance) -> Tolerances {
+        self.resources.insert(resource, tolerance);
+        self
+    }
+
+    /// The tolerance that applies to `resource` and where it came from.
+    pub fn resolve(&self, resource: Resource) -> (Tolerance, ToleranceSource) {
+        match self.resources.get(&resource) {
+            Some(t) => (*t, ToleranceSource::Resource),
+            None => self.resolve_class(resource.class()),
+        }
+    }
+
+    /// The tolerance that applies to `resource`.
+    pub fn for_resource(&self, resource: Resource) -> Tolerance {
+        self.resolve(resource).0
+    }
+
+    fn resolve_class(&self, class: ResourceClass) -> (Tolerance, ToleranceSource) {
+        match (self.classes.get(&class), self.all) {
+            (Some(t), _) => (*t, ToleranceSource::Class(class)),
+            (None, Some(t)) => (t, ToleranceSource::All),
+            (None, None) => (Tolerance::default(), ToleranceSource::Default),
+        }
+    }
+
+    /// Every key [`Tolerances::parse`] accepts: the class names, then the
+    /// resource names.
+    fn keys() -> String {
+        let classes = ResourceClass::ALL.iter().map(|c| c.name());
+        let resources = Resource::ALL.iter().map(|r| r.name());
+        classes.chain(resources).collect::<Vec<_>>().join(", ")
+    }
+
+    /// Parses a comma-separated list of items: a bare percentage that applies
+    /// to every resource (at most one), and `KEY=PERCENTAGE` where the key is
+    /// a class (`storage`, `compute`) or a resource name such as
+    /// `instructions`. Percentages are those of [`Tolerance::parse`]. Every
+    /// key may appear once. A single bare percentage is the same as
+    /// [`Tolerances::uniform`].
+    pub fn parse(spec: &str) -> Result<Tolerances, TolerancesError> {
+        let mut out = Tolerances::default();
+        for item in spec.split(',') {
+            let item = item.trim();
+            if item.is_empty() {
+                return Err(TolerancesError::EmptyItem);
+            }
+            let Some((key, value)) = item.split_once('=') else {
+                let tolerance = Tolerance::parse(item)
+                    .map_err(|source| TolerancesError::Value { key: None, source })?;
+                if out.all.replace(tolerance).is_some() {
+                    return Err(TolerancesError::DuplicateAll);
+                }
+                continue;
+            };
+            let key = key.trim();
+            if key.is_empty() {
+                return Err(TolerancesError::MissingKey);
+            }
+            let class = ResourceClass::from_name(key);
+            let resource = Resource::from_name(key);
+            if class.is_none() && resource.is_none() {
+                return Err(TolerancesError::UnknownKey(key.to_owned()));
+            }
+            let tolerance = Tolerance::parse(value).map_err(|source| TolerancesError::Value {
+                key: Some(key.to_owned()),
+                source,
+            })?;
+            let duplicate = match (class, resource) {
+                (Some(class), _) => out.classes.insert(class, tolerance).is_some(),
+                (None, Some(resource)) => out.resources.insert(resource, tolerance).is_some(),
+                (None, None) => false,
+            };
+            if duplicate {
+                return Err(TolerancesError::DuplicateKey(key.to_owned()));
+            }
+        }
+        Ok(out)
+    }
+}
+
+/// `5%` when one value covers everything, as before. Otherwise one entry per
+/// class, then the resources that were set by name: `storage 0%, compute 5%`.
+impl fmt::Display for Tolerances {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.classes.is_empty() && self.resources.is_empty() {
+            return write!(f, "{}", self.all.unwrap_or_default());
+        }
+        let mut parts = Vec::new();
+        for class in ResourceClass::ALL {
+            let (tolerance, source) = self.resolve_class(*class);
+            let note = if source == ToleranceSource::Default {
+                " (default)"
+            } else {
+                ""
+            };
+            parts.push(format!("{} {tolerance}{note}", class.name()));
+        }
+        for (resource, tolerance) in &self.resources {
+            parts.push(format!("{} {tolerance}", resource.name()));
+        }
+        write!(f, "{}", parts.join(", "))
+    }
+}
+
 /// Which statistic a finding is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StatKind {
@@ -116,6 +326,11 @@ pub struct Finding {
 }
 
 impl Finding {
+    /// The class of the resource that moved.
+    pub fn class(&self) -> ResourceClass {
+        self.resource.class()
+    }
+
     /// The change relative to the baseline, like `+33.3%`; `new` when the
     /// baseline is zero.
     pub fn delta_text(&self) -> String {
@@ -155,6 +370,16 @@ impl Verdict {
     pub fn passed(&self) -> bool {
         self.regressions.is_empty() && self.sample_changes.is_empty()
     }
+
+    /// The regressions in resources of `class`.
+    pub fn regressions_in(&self, class: ResourceClass) -> impl Iterator<Item = &Finding> {
+        self.regressions.iter().filter(move |f| f.class() == class)
+    }
+
+    /// The improvements in resources of `class`.
+    pub fn improvements_in(&self, class: ResourceClass) -> impl Iterator<Item = &Finding> {
+        self.improvements.iter().filter(move |f| f.class() == class)
+    }
 }
 
 /// Whether a snapshot can be compared with a measurement at all.
@@ -166,7 +391,8 @@ pub enum Comparison {
     Compared(Verdict),
 }
 
-/// Compares `current` with `baseline`.
+/// Compares `current` with `baseline`, within one `tolerance` for every
+/// resource.
 ///
 /// The toolchains differ when `soroban-sdk` or `soroban-env-host` differ; the
 /// core library version is recorded for the reader but does not by itself
@@ -178,6 +404,25 @@ pub fn compare(
     current_toolchain: &Toolchain,
     current: &SuiteSnapshot,
     tolerance: Tolerance,
+) -> Comparison {
+    compare_tiered(
+        baseline_toolchain,
+        baseline,
+        current_toolchain,
+        current,
+        &Tolerances::uniform(tolerance),
+    )
+}
+
+/// Compares `current` with `baseline`, checking every resource against the
+/// tolerance that `tolerances` gives it. Improvements are judged by the same
+/// tolerance as regressions. Otherwise this is [`compare`].
+pub fn compare_tiered(
+    baseline_toolchain: &Toolchain,
+    baseline: &SuiteSnapshot,
+    current_toolchain: &Toolchain,
+    current: &SuiteSnapshot,
+    tolerances: &Tolerances,
 ) -> Comparison {
     let mut stale = Vec::new();
     let mut differs = |what: &str, was: &dyn fmt::Display, now: &dyn fmt::Display| {
@@ -253,6 +498,7 @@ pub fn compare(
             let (Some(b), Some(c)) = (base.get(resource), now.get(resource)) else {
                 continue;
             };
+            let tolerance = tolerances.for_resource(resource);
             for (stat, was, is) in [(StatKind::Max, b.max, c.max), (StatKind::P50, b.p50, c.p50)] {
                 let finding = || Finding {
                     handler: handler.clone(),
@@ -491,5 +737,332 @@ mod tests {
             compare(&toolchain(), &s, &core, &s, Tolerance::default()),
             Comparison::Compared(_)
         ));
+    }
+    fn tiered(spec: &str) -> Tolerances {
+        Tolerances::parse(spec).unwrap_or_else(|e| panic!("{spec}: {e}"))
+    }
+
+    fn run_tiered(baseline: &SuiteSnapshot, current: &SuiteSnapshot, spec: &str) -> Verdict {
+        verdict(compare_tiered(
+            &toolchain(),
+            baseline,
+            &toolchain(),
+            current,
+            &tiered(spec),
+        ))
+    }
+
+    #[test]
+    fn parses_tiered_tolerances() {
+        use ToleranceSource as Src;
+        let at = |spec: &str, resource: Resource| {
+            let (t, source) = tiered(spec).resolve(resource);
+            (t.basis_points(), source)
+        };
+        let storage = Src::Class(ResourceClass::Storage);
+        let compute = Src::Class(ResourceClass::Compute);
+
+        // A single bare value is the old behaviour: every resource, as before.
+        for resource in Resource::ALL {
+            assert_eq!(at("2.5%", resource), (250, Src::All), "{resource:?}");
+            assert_eq!(at(" 0 ", resource), (0, Src::All), "{resource:?}");
+        }
+        assert_eq!(tiered("5%"), Tolerances::uniform(Tolerance::default()));
+
+        let spec = "storage=0%,compute=5%";
+        assert_eq!(at(spec, Resource::WriteBytes), (0, storage));
+        assert_eq!(at(spec, Resource::TemporaryEntryRentBumps), (0, storage));
+        assert_eq!(at(spec, Resource::Instructions), (500, compute));
+        assert_eq!(at(spec, Resource::MemBytes), (500, compute));
+
+        // Spaces around items and around `=` do not matter, order does not either.
+        let spaced = " compute = 5% , storage = 0 ";
+        assert_eq!(tiered(spaced), tiered(spec));
+        assert_eq!(tiered("compute=5%,storage=0%"), tiered(spec));
+
+        // What is not mentioned falls back to the default of 5%.
+        assert_eq!(
+            at("compute=3%", Resource::WriteEntries),
+            (500, Src::Default)
+        );
+        assert_eq!(at("compute=3%", Resource::Instructions), (300, compute));
+
+        // A bare value is the base that classes and resources override.
+        assert_eq!(at("5%,storage=0%", Resource::WriteBytes), (0, storage));
+        assert_eq!(at("5%,storage=0%", Resource::MemBytes), (500, Src::All));
+        assert_eq!(
+            at("instructions=0.25%", Resource::Instructions),
+            (25, Src::Resource)
+        );
+    }
+
+    #[test]
+    fn a_resource_beats_its_class_which_beats_everything() {
+        let spec = "9%,storage=2%,compute=3%,write_bytes=1%,instructions=4%";
+        let t = tiered(spec);
+        let bps = |r: Resource| t.for_resource(r).basis_points();
+        assert_eq!(bps(Resource::WriteBytes), 100, "resource over class");
+        assert_eq!(bps(Resource::WriteEntries), 200, "class over everything");
+        assert_eq!(bps(Resource::Instructions), 400, "resource over class");
+        assert_eq!(bps(Resource::MemBytes), 300, "class over everything");
+
+        // Without the class entries the bare value shows through ...
+        let t = tiered("9%,write_bytes=1%");
+        assert_eq!(t.for_resource(Resource::WriteBytes).basis_points(), 100);
+        assert_eq!(t.for_resource(Resource::MemBytes).basis_points(), 900);
+        // ... and without it the default does.
+        let t = tiered("write_bytes=1%");
+        assert_eq!(t.for_resource(Resource::MemBytes).basis_points(), 500);
+        // The resource beats the class whichever way round they are written.
+        assert_eq!(
+            tiered("instructions=4%,compute=3%"),
+            tiered("compute=3%,instructions=4%")
+        );
+        // The builder agrees with the parser.
+        let built = Tolerances::uniform(Tolerance::parse("9%").unwrap())
+            .with_class(ResourceClass::Storage, Tolerance::parse("2%").unwrap())
+            .with_class(ResourceClass::Compute, Tolerance::parse("3%").unwrap())
+            .with_resource(Resource::WriteBytes, Tolerance::parse("1%").unwrap())
+            .with_resource(Resource::Instructions, Tolerance::parse("4%").unwrap());
+        assert_eq!(built, tiered(spec));
+    }
+
+    #[test]
+    fn rejects_bad_tolerance_lists() {
+        let keys = "storage, compute, instructions, mem_bytes, disk_read_entries";
+        let err = |spec: &str| match Tolerances::parse(spec) {
+            Ok(t) => panic!("`{spec}` was accepted as {t}"),
+            Err(e) => e,
+        };
+        for spec in ["", ",", "5%,", ",5%", "storage=0%,,compute=5%", " , "] {
+            assert!(matches!(err(spec), TolerancesError::EmptyItem), "{spec:?}");
+        }
+        for spec in ["=5%", " =5%", "storage=0%,=5%"] {
+            assert!(matches!(err(spec), TolerancesError::MissingKey), "{spec:?}");
+        }
+        for (spec, key) in [
+            ("cpu=5%", "cpu"),
+            ("Storage=0%", "Storage"),
+            ("COMPUTE=5%", "COMPUTE"),
+            ("fee=1%", "fee"),
+            ("storage=0%,tx_size=1%", "tx_size"),
+        ] {
+            match err(spec) {
+                TolerancesError::UnknownKey(found) => assert_eq!(found, key),
+                other => panic!("{spec}: {other:?}"),
+            }
+        }
+        for (spec, key) in [
+            ("storage=", "storage"),
+            ("storage=lots", "storage"),
+            ("compute=-1%", "compute"),
+            ("compute=1.234%", "compute"),
+            ("instructions=5%%", "instructions"),
+            ("compute=42949673%", "compute"),
+        ] {
+            match err(spec) {
+                TolerancesError::Value {
+                    key: Some(found), ..
+                } => assert_eq!(found, key, "{spec}"),
+                other => panic!("{spec}: {other:?}"),
+            }
+        }
+        for spec in ["lots", "storage", "-1%", "5%%", "42949673%"] {
+            assert!(
+                matches!(err(spec), TolerancesError::Value { key: None, .. }),
+                "{spec}"
+            );
+        }
+        for (spec, key) in [
+            ("storage=0%,storage=1%", "storage"),
+            ("compute=5%,compute=5%", "compute"),
+            ("instructions=1%,instructions=2%", "instructions"),
+            ("5%,compute=1%,mem_bytes=1%,mem_bytes=2%", "mem_bytes"),
+        ] {
+            match err(spec) {
+                TolerancesError::DuplicateKey(found) => assert_eq!(found, key, "{spec}"),
+                other => panic!("{spec}: {other:?}"),
+            }
+        }
+        for spec in ["5%,5%", "5%,storage=0%,1%"] {
+            assert!(matches!(err(spec), TolerancesError::DuplicateAll), "{spec}");
+        }
+        // The largest percentage that fits in basis points is still fine.
+        assert!(Tolerances::parse("storage=42949672%").is_ok());
+
+        // The messages name the problem and list every key that would work.
+        for spec in ["cpu=5%", "=5%", "storage"] {
+            let message = err(spec).to_string();
+            assert!(message.contains(keys), "{spec}: {message}");
+        }
+        assert!(err("cpu=5%").to_string().contains("`cpu`"));
+        assert!(err("storage=0%,storage=1%")
+            .to_string()
+            .contains("`storage`"));
+        // A bare value that is not a percentage keeps the original wording.
+        assert!(err("lots")
+            .to_string()
+            .starts_with("invalid tolerance `lots`: expected a non-negative percentage"));
+    }
+
+    #[test]
+    fn tolerances_are_displayed_for_the_report_header() {
+        let shown = |spec: &str| tiered(spec).to_string();
+        // Unchanged for a single value, and for no value at all.
+        assert_eq!(shown("5%"), "5%");
+        assert_eq!(shown("0"), "0%");
+        assert_eq!(shown("2.5%"), "2.5%");
+        assert_eq!(Tolerances::default().to_string(), "5%");
+        assert_eq!(shown("storage=0%,compute=5%"), "storage 0%, compute 5%");
+        assert_eq!(shown("compute=3%"), "storage 5% (default), compute 3%");
+        assert_eq!(shown("2%,compute=3%"), "storage 2%, compute 3%");
+        assert_eq!(
+            shown("storage=0%,compute=5%,instructions=0.25%"),
+            "storage 0%, compute 5%, instructions 0.25%"
+        );
+    }
+
+    #[test]
+    fn each_class_is_judged_by_its_own_tolerance() {
+        // Storage: write_entries 100 -> 101 is +1%. Compute: instructions
+        // 1000 -> 1050 is +5%, and 1051 is just over.
+        let base = suite(&[("h", 1000, 100, 5)]);
+        let now = |instructions: i64, writes: i64| suite(&[("h", instructions, writes, 5)]);
+        let spec = "storage=0%,compute=5%";
+
+        assert!(run_tiered(&base, &now(1050, 100), spec).passed());
+        let v = run_tiered(&base, &now(1051, 100), spec);
+        assert!(!v.passed());
+        assert!(v
+            .regressions
+            .iter()
+            .all(|f| f.resource == Resource::Instructions));
+        assert_eq!(v.regressions_in(ResourceClass::Compute).count(), 2);
+        assert_eq!(v.regressions_in(ResourceClass::Storage).count(), 0);
+
+        // One more write is over a 0% storage tolerance, with compute loose.
+        let v = run_tiered(&base, &now(1000, 101), "storage=0%,compute=1000%");
+        assert_eq!(v.regressions_in(ResourceClass::Storage).count(), 2);
+        assert_eq!(v.regressions_in(ResourceClass::Compute).count(), 0);
+        // ... and within a 1% one, exactly at the edge.
+        assert!(run_tiered(&base, &now(1000, 101), "storage=1%").passed());
+        assert!(!run_tiered(&base, &now(1000, 102), "storage=1%").passed());
+
+        // The same change fails a strict compute tolerance and passes a lax one.
+        assert!(!run_tiered(&base, &now(1040, 100), "compute=3.99%").passed());
+        assert!(run_tiered(&base, &now(1040, 100), "compute=4%").passed());
+
+        // A resource named on its own overrides its class.
+        assert!(run_tiered(&base, &now(1100, 100), "compute=0%,instructions=10%").passed());
+        assert!(!run_tiered(&base, &now(1101, 100), "compute=0%,instructions=10%").passed());
+    }
+
+    #[test]
+    fn a_zero_baseline_allows_only_zero_in_every_tier() {
+        let base = suite(&[("h", 0, 0, 5)]);
+        let now = suite(&[("h", 1, 1, 5)]);
+        let v = run_tiered(&base, &now, "storage=100%,compute=100%");
+        assert_eq!(v.regressions_in(ResourceClass::Storage).count(), 2);
+        assert_eq!(v.regressions_in(ResourceClass::Compute).count(), 2);
+        assert!(run_tiered(&base, &base, "storage=0%,compute=0%").passed());
+    }
+
+    #[test]
+    fn an_improvement_is_judged_by_the_tolerance_of_its_class() {
+        let base = suite(&[("h", 1000, 100, 5)]);
+        // instructions -3% and write_entries -1%.
+        let now = suite(&[("h", 970, 99, 5)]);
+
+        let v = run_tiered(&base, &now, "storage=0%,compute=5%");
+        assert!(v.passed());
+        assert_eq!(v.improvements_in(ResourceClass::Storage).count(), 2);
+        assert_eq!(v.improvements_in(ResourceClass::Compute).count(), 0);
+
+        let v = run_tiered(&base, &now, "storage=5%,compute=0%");
+        assert_eq!(v.improvements_in(ResourceClass::Storage).count(), 0);
+        assert_eq!(v.improvements_in(ResourceClass::Compute).count(), 2);
+
+        // The two tolerances can be applied to a larger drop at once.
+        let v = run_tiered(&base, &suite(&[("h", 900, 90, 5)]), "storage=5%,compute=5%");
+        assert_eq!(v.improvements.len(), 4);
+    }
+
+    #[test]
+    fn a_uniform_tiered_comparison_is_the_plain_comparison() {
+        let base = suite(&[("withdraw", 1000, 4, 5), ("cancel", 500, 1, 5)]);
+        let cases = [
+            suite(&[("withdraw", 1000, 4, 5), ("cancel", 500, 1, 5)]),
+            suite(&[("withdraw", 1040, 5, 5), ("cancel", 500, 1, 5)]),
+            suite(&[("withdraw", 800, 4, 5), ("cancel", 520, 1, 4)]),
+            suite(&[("withdraw", 1000, 4, 5), ("cancel", 500, 0, 5)]),
+            suite(&[("withdraw", 2000, 9, 5), ("cancel", 1, 1, 5)]),
+        ];
+        for text in ["0%", "1%", "2.5%", "5%", "50%", "10000%"] {
+            let tolerance = Tolerance::parse(text).unwrap();
+            for now in &cases {
+                assert_eq!(
+                    compare(&toolchain(), &base, &toolchain(), now, tolerance),
+                    compare_tiered(
+                        &toolchain(),
+                        &base,
+                        &toolchain(),
+                        now,
+                        &Tolerances::uniform(tolerance)
+                    ),
+                    "{text}"
+                );
+                assert_eq!(
+                    compare(&toolchain(), &base, &toolchain(), now, tolerance),
+                    compare_tiered(&toolchain(), &base, &toolchain(), now, &tiered(text)),
+                    "{text}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_stale_snapshot_is_stale_whatever_the_tolerances() {
+        let base = suite(&[("withdraw", 1000, 2, 5)]);
+        let mut now = base.clone();
+        now.seed = 8;
+        assert!(matches!(
+            compare_tiered(
+                &toolchain(),
+                &base,
+                &toolchain(),
+                &now,
+                &tiered("storage=0%")
+            ),
+            Comparison::Stale(_)
+        ));
+        // And a changed sample count fails in every tier.
+        let v = run_tiered(
+            &base,
+            &suite(&[("withdraw", 1000, 2, 4)]),
+            "storage=100%,compute=100%",
+        );
+        assert!(!v.passed());
+        assert!(v.regressions.is_empty());
+    }
+
+    #[test]
+    fn findings_know_their_class() {
+        let base = suite(&[("h", 1000, 2, 5)]);
+        let v = run_tiered(&base, &suite(&[("h", 2000, 3, 5)]), "0%");
+        let classes: Vec<_> = v.regressions.iter().map(Finding::class).collect();
+        assert_eq!(
+            classes
+                .iter()
+                .filter(|c| **c == ResourceClass::Storage)
+                .count(),
+            2
+        );
+        assert_eq!(
+            classes
+                .iter()
+                .filter(|c| **c == ResourceClass::Compute)
+                .count(),
+            2
+        );
     }
 }

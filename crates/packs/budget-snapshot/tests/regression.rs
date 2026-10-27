@@ -1,10 +1,11 @@
 //! End to end: measure a suite, store the snapshot, change the contract and
 //! let the comparison catch it.
 //!
-//! `Light` and `Heavy` are the same counter, except that `Heavy::increment`
-//! also writes an audit entry to persistent storage: the kind of regression a
-//! snapshot is for. The counter refuses to go above four, so some calls fail
-//! and must not be measured.
+//! `Light`, `Heavy` and `Busy` are the same counter. `Heavy::increment` also
+//! writes an audit entry to persistent storage: the kind of regression a
+//! snapshot is for. `Busy::increment` instead hashes a buffer a dozen times,
+//! which costs instructions and writes nothing. The counter refuses to go
+//! above four, so some calls fail and must not be measured.
 
 use breakwater::proptest::prelude::*;
 use breakwater::{
@@ -12,10 +13,12 @@ use breakwater::{
     ViolationKind,
 };
 use breakwater_pack_budget_snapshot::{
-    compare, BudgetError, BudgetReport, Comparison, Recorder, Resource, Snapshot, StatKind, Target,
-    Tolerance, Toolchain,
+    compare, compare_tiered, BudgetError, BudgetReport, Comparison, Recorder, Resource,
+    ResourceClass, Snapshot, StatKind, Target, Tolerance, Tolerances, Toolchain,
 };
-use soroban_sdk::{contract, contracterror, contractimpl, symbol_short, Address, Env, Symbol};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, symbol_short, Address, Bytes, Env, Symbol,
+};
 
 const COUNT: Symbol = symbol_short!("COUNT");
 const AUDIT: Symbol = symbol_short!("AUDIT");
@@ -66,10 +69,34 @@ impl Heavy {
     }
 }
 
+/// Rounds of SHA-256 that `Busy::increment` adds. The host charges each one
+/// to the CPU model only: no entry is read or written and no event is emitted.
+const HASH_ROUNDS: u32 = 12;
+
+#[contract]
+pub struct Busy;
+
+#[contractimpl]
+impl Busy {
+    pub fn increment(env: Env) -> Result<u32, Error> {
+        let n = bump(&env)?;
+        let mut buffer = Bytes::from_array(&env, &[7u8; 64]);
+        for _ in 0..HASH_ROUNDS {
+            buffer = env.crypto().sha256(&buffer).to_bytes().into();
+        }
+        Ok(n)
+    }
+
+    pub fn get(env: Env) -> u32 {
+        env.storage().instance().get(&COUNT).unwrap_or(0)
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Variant {
     Light,
     Heavy,
+    Busy,
 }
 
 /// Calls `increment`; with `read_back` it then reads the count through a
@@ -107,6 +134,7 @@ impl Handler for Increment {
         let result = match self.variant {
             Variant::Light => LightClient::new(env, &id).try_increment(),
             Variant::Heavy => HeavyClient::new(env, &id).try_increment(),
+            Variant::Busy => BusyClient::new(env, &id).try_increment(),
         };
         let outcome = match result {
             Ok(Ok(n)) => CallOutcome::returning(n),
@@ -118,6 +146,7 @@ impl Handler for Increment {
             match self.variant {
                 Variant::Light => LightClient::new(env, &id).get(),
                 Variant::Heavy => HeavyClient::new(env, &id).get(),
+                Variant::Busy => BusyClient::new(env, &id).get(),
             };
         }
         Ok(outcome)
@@ -155,6 +184,7 @@ fn measure_target(
     let contract = match variant {
         Variant::Light => env.register(Light, ()),
         Variant::Heavy => env.register(Heavy, ()),
+        Variant::Busy => env.register(Busy, ()),
     }
     .to_string()
     .to_string();
@@ -179,6 +209,7 @@ fn measure_target(
             match variant {
                 Variant::Light => env.register_at(&id, Light, ()),
                 Variant::Heavy => env.register_at(&id, Heavy, ()),
+                Variant::Busy => env.register_at(&id, Busy, ()),
             };
         })
         .run()
@@ -193,6 +224,16 @@ fn compared(baseline: &BudgetReport, current: &BudgetReport, tolerance: &str) ->
         &toolchain(),
         &current.snapshot,
         Tolerance::parse(tolerance).expect("tolerance"),
+    )
+}
+
+fn compared_tiered(baseline: &BudgetReport, current: &BudgetReport, spec: &str) -> Comparison {
+    compare_tiered(
+        &toolchain(),
+        &baseline.snapshot,
+        &toolchain(),
+        &current.snapshot,
+        &Tolerances::parse(spec).expect("tolerances"),
     )
 }
 
@@ -258,6 +299,74 @@ fn an_unchanged_contract_passes_and_an_extra_write_is_caught() {
         Comparison::Compared(v) => assert!(v.passed()),
         other => panic!("{other:?}"),
     }
+}
+
+/// The point of splitting the tolerances: a change that only costs CPU leaves
+/// every storage figure where it was, so a gate that looks at storage alone
+/// cannot see it, and one that also looks at `instructions` and `mem_bytes`
+/// can.
+#[test]
+fn a_compute_only_change_slips_past_a_storage_only_gate() {
+    let baseline = measure(Variant::Light, 7, false).expect("measures");
+    let busy = measure(Variant::Busy, 7, false).expect("measures");
+    assert_eq!(
+        baseline.snapshot.workload_digest, busy.snapshot.workload_digest,
+        "same seed and steps, so this is a regression and not a stale snapshot"
+    );
+    assert_eq!(baseline.skipped, busy.skipped);
+
+    let (was, now) = (
+        &baseline.snapshot.handlers["increment"],
+        &busy.snapshot.handlers["increment"],
+    );
+    for resource in ResourceClass::Storage.resources() {
+        assert_eq!(was.get(resource), now.get(resource), "{}", resource.name());
+    }
+    let (was_ins, now_ins) = (
+        was.get(Resource::Instructions).unwrap().max,
+        now.get(Resource::Instructions).unwrap().max,
+    );
+    assert!(
+        now_ins * 100 > was_ins * 110,
+        "twelve hashes cost more than 10%: {was_ins} -> {now_ins}"
+    );
+
+    // Storage at 0% and compute left open: nothing to see.
+    match compared_tiered(&baseline, &busy, "storage=0%,compute=1000000%") {
+        Comparison::Compared(v) => assert!(v.passed(), "{:?}", v.regressions),
+        other => panic!("{other:?}"),
+    }
+    // The tiered gate catches it, and only in the compute class.
+    let Comparison::Compared(verdict) = compared_tiered(&baseline, &busy, "storage=0%,compute=5%")
+    else {
+        panic!("the workload is identical");
+    };
+    assert!(!verdict.passed());
+    assert_eq!(verdict.regressions_in(ResourceClass::Storage).count(), 0);
+    assert!(verdict
+        .regressions_in(ResourceClass::Compute)
+        .any(|f| f.resource == Resource::Instructions && f.stat == StatKind::Max));
+    // So does the old single tolerance, which is what made CI noisy.
+    let Comparison::Compared(uniform) = compared(&baseline, &busy, "0%") else {
+        panic!("the workload is identical");
+    };
+    assert!(!uniform.passed());
+}
+
+#[test]
+fn a_storage_change_is_caught_whatever_the_compute_tolerance() {
+    let baseline = measure(Variant::Light, 7, false).expect("measures");
+    let heavy = measure(Variant::Heavy, 7, false).expect("measures");
+    let Comparison::Compared(verdict) =
+        compared_tiered(&baseline, &heavy, "storage=0%,compute=1000000%")
+    else {
+        panic!("the workload is identical");
+    };
+    assert!(!verdict.passed());
+    assert_eq!(verdict.regressions_in(ResourceClass::Compute).count(), 0);
+    assert!(verdict
+        .regressions_in(ResourceClass::Storage)
+        .any(|f| f.resource == Resource::WriteEntries));
 }
 
 #[test]

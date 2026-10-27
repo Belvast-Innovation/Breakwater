@@ -88,27 +88,39 @@ jobs:
 
       # The committed .breakwater-snapshot.json is the resource baseline of the
       # ttl-archival demo. Metering is deterministic: for the locked dependencies
-      # the numbers are the same on every machine, so the check runs with a 0%
-      # tolerance (the CLI default of 5% is meant for local use). The contract as
-      # it stands must match the baseline exactly (exit 0), and the same suite
-      # built with the demo regression must be caught (exit 1). Exit 2 means the
+      # the numbers are the same on every machine. The gate has two tiers. The
+      # storage figures (entries and bytes read and written, events, rent) follow
+      # the call's own footprint, so they are held to exactly 0%. `instructions`
+      # and `mem_bytes` also follow how many ledger entries the test Env touched
+      # before the call, which moved handlers nobody had changed by up to 3.5% in
+      # the demo, so they get 5%. The contract as it stands must match the
+      # baseline (exit 0). Each demo regression must be caught (exit 1):
+      # `regress-demo` writes one more entry, `regress-compute` only costs CPU
+      # and would pass a gate on the storage figures alone. Exit 2 means the
       # snapshot is missing, malformed or stale, which fails the build too.
       - name: Check the budget snapshot
         run: |
           set +e
           cli=target/debug/breakwater
-          "$cli" --no-color snapshot examples/ttl-archival --check --tolerance 0%
-          code=$?
-          if [ "$code" -ne 0 ]; then
-            echo "::error::snapshot --check --tolerance 0% exited with $code, expected 0 (record it again with 'breakwater snapshot examples/ttl-archival' if the change is intended)"
-            exit 1
-          fi
-          "$cli" --no-color snapshot examples/ttl-archival --check --tolerance 0% --features regress-demo
-          code=$?
-          if [ "$code" -ne 1 ]; then
-            echo "::error::snapshot --check --tolerance 0% --features regress-demo exited with $code, expected 1"
-            exit 1
-          fi
+          tolerance='storage=0%,compute=5%'
+          # check <expected exit code> [cargo features]
+          check() {
+            expected=$1
+            features=${2:+--features $2}
+            # shellcheck disable=SC2086 # $features is empty or the two words of the flag
+            "$cli" --no-color snapshot examples/ttl-archival --check --tolerance "$tolerance" $features
+            code=$?
+            if [ "$code" -ne "$expected" ]; then
+              echo "::error::snapshot --check --tolerance $tolerance ${2:+--features $2} exited with $code, expected $expected"
+              if [ "$expected" -eq 0 ]; then
+                echo "::error::record it again with 'breakwater snapshot examples/ttl-archival' if the change is intended"
+              fi
+              exit 1
+            fi
+          }
+          check 0
+          check 1 regress-demo
+          check 1 regress-compute
 
       # soroban-sdk 28 refuses a bare `cargo build --target wasm32v1-none`: its build
       # script requires the spec-shaking support that only `stellar contract build` provides.
